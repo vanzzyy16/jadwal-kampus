@@ -117,6 +117,7 @@ h1,h2,h3,h4{font-family:'Space Grotesk',sans-serif;margin:0;line-height:1.2}
 .hero-text::after{content:'🎓';position:absolute;right:8px;bottom:-28px;font-size:120px;opacity:.16;pointer-events:none}
 .hero h1{font-size:clamp(25px,3.6vw,40px);line-height:1.05;position:relative}
 .hero h1 span{display:block;background:linear-gradient(90deg,#fff,#e9d5ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero-tag{display:inline-block;background:#fde047;color:#11132b;font-family:'Space Grotesk';font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;padding:5px 13px;border:2px solid #11132b;border-radius:8px;box-shadow:3px 3px 0 #11132b;transform:rotate(-2deg);margin-bottom:14px;position:relative}
 .hero p{opacity:.94;font-size:14px;margin:10px 0 0;position:relative}
 .hero-badges{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;position:relative}
 .hero-badges span{background:#ffffff26;border:1px solid #ffffff44;padding:6px 13px;border-radius:999px;font-size:11.5px;font-weight:600;backdrop-filter:blur(4px)}
@@ -284,6 +285,11 @@ td .del:hover,.jcard .del:hover{background:var(--dan-bg);color:var(--dan)}
 
 /* ===================== FOOTER ===================== */
 footer{text-align:center;color:var(--mut);padding:26px 16px 90px;font-size:13px}
+.footer-brutal{display:flex;align-items:center;justify-content:center;gap:12px;border:2px solid var(--line);border-radius:14px;background:var(--card);box-shadow:var(--brutal-sh-sm);padding:14px 18px;margin:8px 0 0;max-width:fit-content;margin-left:auto;margin-right:auto}
+.footer-brutal p{margin:0;font-size:12.5px}
+.footer-brutal b{color:var(--ink)}
+.footer-emoji{font-size:18px}
+@media(max-width:640px){.footer-brutal{flex-direction:row;gap:8px;font-size:11px}.footer-brutal p{font-size:11px}}
 
 /* ===================== MOBILE TABS / NAV ===================== */
 .tabs{display:none;gap:8px;margin-bottom:14px}

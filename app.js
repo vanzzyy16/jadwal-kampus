@@ -646,7 +646,13 @@ $('btnExportPNG').addEventListener('click', () => {
           --acc:#4f46e5;--acc2:#7c3aed;--ok:#059669;--dan:#dc2626;
           --info:#0ea5e9;--ok-bg:#ecfdf5;--dan-bg:#fef2f2;--info-bg:#f0f9ff;
         }
-        *{ background-color:transparent !important; box-shadow:none !important; }
+        *{ background-color:transparent !important; }
+        /* hilangkan shadow BLUR (problematis html2canvas) tapi pertahankan
+           shadow offset brutal (5px 5px 0 — simple, dirender dgn baik) */
+        *{ box-shadow:none !important; }
+        .card,.toolbar,.stat,.import-card,.btn-primary,.btn-ghost,.icon-btn,.chip,.drop,.logo,.daycol,.alert,.modal-panel,.seg,.fab,.jcard,.pill,.badge,.hero-badges span,#tabs button,.bottomnav button{ box-shadow:5px 5px 0 #11132b !important; }
+        .card:hover,.stat:hover,.btn-primary:hover,.btn-ghost:hover,.icon-btn:hover,.drop:hover,.chip:hover,#tabs button.on{ box-shadow:7px 7px 0 #11132b !important; }
+        .modal-panel{ box-shadow:7px 7px 0 #11132b !important; }
         .card{ background-color:#ffffff !important; }
         .table-wrap,#cards,.jcard,.stat,.toolbar,#cardTabel{ background-color:#ffffff !important; }
         tbody tr:hover{ background:#f8f9ff !important; }
