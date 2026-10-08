@@ -205,7 +205,7 @@ h1,h2,h3,h4{font-family:'Space Grotesk',sans-serif;margin:0;line-height:1.2}
 .filename.ok{border-color:var(--ok);color:var(--ok)}
 
 /* ===================== CALENDAR ===================== */
-.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
 .daycol{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:8px;min-height:120px;transition:.15s}
 .daycol h4{margin:0 0 8px;font-size:12.5px;display:flex;justify-content:space-between;align-items:center}
 .daycol h4 small{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:1px 7px;font-size:10px;font-weight:700}
@@ -519,9 +519,15 @@ thead th{box-shadow:inset 0 -1px 0 var(--line)}
 /* scrollbar styling — thin + auto-hide feel */
 .table-wrap{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 
-/* calendar event text clamp so long matkul names don't blow layout */
-.ev{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ev b{display:inline}
+/* calendar: min-width:0 lets columns shrink below content width so the grid
+   never overflows its card (grid items default to min-content). The matching
+   minmax(0,1fr) is set on .calendar above. */
+.daycol{min-width:0}
+
+/* clamp long matkul names to 2 lines (ellipsis) without forcing horizontal
+   overflow — replaces the white-space:nowrap regression that blew the grid. */
+.ev{overflow:hidden}
+.ev b{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;text-overflow:ellipsis;word-break:break-word}
 
 /* focus-visible ring for chips & interactive elements (keyboard users) */
 .chip:focus-visible,.seg-btn:focus-visible,.tab:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
