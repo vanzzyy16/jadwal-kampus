@@ -8,7 +8,6 @@
 /* ---------- tiny helpers ---------- */
 const $ = id => document.getElementById(id);
 const HARI = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
-const DAYMAP = {Monday:'Senin',Tuesday:'Selasa',Wednesday:'Rabu',Thursday:'Kamis',Friday:'Jumat',Saturday:'Sabtu',Sunday:'Minggu'};
 
 const STORAGE_KEY = 'jadwal-kampus';
 let data = [];
@@ -18,7 +17,6 @@ try {
 } catch (e) { data = []; }
 
 let editingId = null;
-let sortAsc = true;
 
 /* ---------- storage ---------- */
 const save = () => {
@@ -93,10 +91,10 @@ function render() {
   const { ids: clash, groups } = tandaiBentrok(data);
 
   /* --- stats with animation --- */
+  const todayKey = HARI[(new Date().getDay() + 6) % 7]; // getDay: 0=Minggu..6=Sabtu → map ke Senin..Minggu
   animateStat('stTotal', data.length);
   animateStat('stSKS', data.reduce((s,d) => s + (+d.sks || 0), 0));
   animateStat('stBentrok', clash.size);
-  const todayKey = DAYMAP[new Date().toLocaleDateString('en-US',{weekday:'long'})];
   animateStat('stHariIni', data.filter(d => d.hari === todayKey).length);
 
   /* --- count pill --- */
@@ -166,27 +164,27 @@ function render() {
   const tbody = $('tbody');
   tbody.innerHTML = list.length
     ? list.map(d => `<tr class="${clash.has(d.id)?'bentrok':''}" data-id="${d.id}">
-        <td><b>${esc(d.hari)}</b></td>
-        <td>${fmtTime(d.mulai)}–${fmtTime(d.selesai)}</td>
+        <td><b>${esc(d.hari)||'-'}</b></td>
+        <td>${fmtTime(d.mulai)||'-'}${fmtTime(d.selesai)?'–'+fmtTime(d.selesai):''}</td>
         <td><b>${esc(d.matkul)}</b>${d.sks?` <span class="muted" style="font-weight:400">(${d.sks} sks)</span>`:''}</td>
         <td>${esc(d.kode)||'-'}</td>
         <td>${esc(d.dosen)||'-'}</td>
         <td>${esc(d.kelas)||'-'}</td>
         <td>${esc(d.ruang)||'-'}</td>
-        <td><span class="badge ${d.tipe==='Praktikum'?'Praktikum':'Teori'}">${esc(d.tipe)}</span></td>
+        <td><span class="badge ${d.tipe==='Praktikum'?'Praktikum':'Teori'}">${esc(d.tipe)||'-'}</span></td>
         <td><button class="del" data-del="${d.id}" title="Hapus">🗑️</button></td>
       </tr>`).join('')
-    : '';
+    : `<tr><td colspan="9" class="empty-row">${data.length?'Tidak ada jadwal yang cocok dengan filter.':'Belum ada jadwal — tambah manual / upload Excel / muat data contoh.'}</td></tr>`;
 
   /* --- cards (mobile) --- */
   const cards = $('cards');
   cards.innerHTML = list.length
     ? list.map(d => `<div class="jcard ${d.tipe==='Praktikum'?'prak':''} ${clash.has(d.id)?'bentrok':''}" data-id="${d.id}">
         <div class="jt">${esc(d.matkul)}${d.sks?` <span class="muted" style="font-weight:400;font-size:12px">${d.sks} sks</span>`:''}</div>
-        <div class="jm">📅 ${esc(d.hari)} • ⏰ ${fmtTime(d.mulai)}–${fmtTime(d.selesai)}${d.ruang?' • 📍 '+esc(d.ruang):''}${d.kelas?' • 🏫 '+esc(d.kelas):''}${d.dosen?' • 👨‍🏫 '+esc(d.dosen):''}</div>
+        <div class="jm">📅 ${esc(d.hari)||'-'} • ⏰ ${fmtTime(d.mulai)||'-'}${fmtTime(d.selesai)?'–'+fmtTime(d.selesai):''}${d.ruang?' • 📍 '+esc(d.ruang):''}${d.kelas?' • 🏫 '+esc(d.kelas):''}${d.dosen?' • 👨‍🏫 '+esc(d.dosen):''}</div>
         <div class="jr"><span class="badge ${d.tipe==='Praktikum'?'Praktikum':'Teori'}">${d.tipe==='Praktikum'?'🧪 Praktikum':'📖 Teori'}</span><button class="del" data-del="${d.id}" title="Hapus">🗑️</button></div>
       </div>`).join('')
-    : '';
+    : `<p class="muted" style="text-align:center;padding:20px">${data.length?'Tidak ada jadwal yang cocok dengan filter.':'Belum ada jadwal.'}</p>`;
 
   /* --- empty state --- */
   const empty = $('emptyState');
@@ -209,7 +207,14 @@ function animateStat(id, target) {
   let v = cur;
   const tick = () => {
     v += step * stride;
-    if ((step > 0 && v >= target) || (step < 0 && v <= target)) { el.textContent = target; el.style.animation='countUp .35s ease'; return; }
+    if ((step > 0 && v >= target) || (step < 0 && v <= target)) {
+      el.textContent = target;
+      // re-trigger the countUp animation so it plays every time the value lands
+      el.style.animation = 'none';
+      void el.offsetWidth; // force reflow
+      el.style.animation = 'countUp .35s ease';
+      return;
+    }
     el.textContent = v;
     requestAnimationFrame(tick);
   };
@@ -221,10 +226,11 @@ function animateStat(id, target) {
    ============================================================ */
 $('formAdd').addEventListener('submit', e => {
   e.preventDefault();
-  if (toMin($('inMulai').value) >= toMin($('inSelesai').value)) return toast('Jam selesai harus lebih besar dari jam mulai');
+  if (!$('inMatkul').value.trim()) return toast('Nama matkul wajib diisi');
   if (!$('inHari').value) return toast('Pilih hari dulu');
+  if (toMin($('inMulai').value) >= toMin($('inSelesai').value)) return toast('Jam selesai harus lebih besar dari jam mulai');
   data.push({
-    id: uid(), matkul: $('inMatkul').value.trim(), kode: $('inKode').value.trim(), sks: +$('inSKS').value || 0,
+    id: uid(), matkul: $('inMatkul').value.trim(), kode: $('inKode').value.trim(), sks: Math.min(8, Math.max(0, +$('inSKS').value || 0)),
     hari: $('inHari').value, tipe: $('inTipe').value, mulai: $('inMulai').value, selesai: $('inSelesai').value,
     kelas: $('inKelas').value.trim(), ruang: $('inRuang').value.trim(), dosen: $('inDosen').value.trim(), prodi: $('inProdi').value.trim()
   });
@@ -279,8 +285,9 @@ function openEdit(id) {
 $('formEdit').addEventListener('submit', e => {
   e.preventDefault();
   if (!editingId) return;
-  if (toMin($('edMulai').value) >= toMin($('edSelesai').value)) return toast('Jam selesai harus > jam mulai');
+  if (!$('edMatkul').value.trim()) return toast('Nama matkul wajib diisi');
   if (!$('edHari').value) return toast('Pilih hari dulu');
+  if (toMin($('edMulai').value) >= toMin($('edSelesai').value)) return toast('Jam selesai harus > jam mulai');
   const d = data.find(x => x.id === editingId);
   if (!d) { closeModal('modalEdit'); return; }
   Object.assign(d, {
@@ -370,13 +377,22 @@ try {
    ============================================================ */
 $('btnShare').addEventListener('click', e => {
   e.stopPropagation();
-  $('shareMenu').hidden = !$('shareMenu').hidden;
+  const sm = $('shareMenu');
+  const open = sm.hidden;
+  sm.hidden = !open;
+  sm.closest('.menu-wrap')?.classList.toggle('open', open);
 });
 document.addEventListener('click', e => {
   const sm = $('shareMenu');
-  if (!sm.hidden && !e.target.closest('.menu-wrap')) sm.hidden = true;
+  if (!sm.hidden && !e.target.closest('.menu-wrap')) {
+    sm.hidden = true;
+    sm.closest('.menu-wrap')?.classList.remove('open');
+  }
 });
-$('shareMenu').querySelectorAll('button').forEach(b => b.addEventListener('click', () => $('shareMenu').hidden = true));
+$('shareMenu').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+  $('shareMenu').hidden = true;
+  $('shareMenu').closest('.menu-wrap')?.classList.remove('open');
+}));
 
 /* ============================================================
    FILTERS
@@ -430,14 +446,16 @@ document.querySelectorAll('.seg-btn[data-view]').forEach(b => b.addEventListener
    MOBILE TABS / NAV
    ============================================================ */
 function goTab(t) {
-  document.body.dataset.mtab = t;
-  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  // "top" (Beranda) = tampilkan view jadwal lalu scroll ke atas
+  const view = t === 'top' ? 'jadwal' : t;
+  document.body.dataset.mtab = view;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === view));
   document.querySelectorAll('.bottomnav button').forEach(b => b.classList.toggle('on', b.dataset.go === t));
   if (t === 'top') window.scrollTo({ top: 0, behavior: 'smooth' });
   else if (t === 'jadwal') $('cardTabel').scrollIntoView({ behavior: 'smooth' });
   else if (t === 'tambah') {
     document.querySelector('.side .form-card')?.scrollIntoView({ behavior: 'smooth' });
-    setTimeout(() => $('inMatkul').focus(), 400);
+    setTimeout(() => $('inMatkul')?.focus(), 400);
   } else if (t === 'import') document.querySelector('.side .import-card')?.scrollIntoView({ behavior: 'smooth' });
 }
 document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => goTab(b.dataset.tab)));
@@ -886,5 +904,13 @@ armDrop('dropTeori','fileTeori');armDrop('dropPraktikum','filePraktikum');
 if(window.innerWidth>900)$('filterBody').classList.add('open');
 render();
 
-/* live update "hari ini" marker every minute */
-setInterval(() => { if (document.visibilityState === 'visible') render(); }, 60000);
+/* live update "hari ini" marker every minute — but skip when a modal is open
+   or the user is actively typing in a search field, to avoid disrupting them */
+setInterval(() => {
+  if (document.visibilityState !== 'visible') return;
+  if (!document.querySelector('.modal:not(.hidden)')) {
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA')) return;
+    render();
+  }
+}, 60000);
