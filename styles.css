@@ -172,7 +172,9 @@ h1,h2,h3,h4{font-family:'Space Grotesk',sans-serif;margin:0;line-height:1.2}
 
 /* ===================== LAYOUT ===================== */
 .layout{display:grid;grid-template-columns:330px 1fr;gap:14px;align-items:start}
-.side{display:flex;flex-direction:column;gap:14px}
+.side{display:flex;flex-direction:column;gap:14px;position:sticky;top:74px;max-height:calc(100vh - 88px);overflow-y:auto;overflow-x:hidden;padding-right:4px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.side::-webkit-scrollbar{width:6px}
+.side::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
 .main{display:flex;flex-direction:column;gap:14px;min-width:0}
 
 /* ===================== CARD ===================== */
@@ -303,6 +305,7 @@ footer{text-align:center;color:var(--mut);padding:26px 16px 90px;font-size:13px}
 .tabs button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:11px;border-radius:var(--radius-sm);font-weight:700;font-size:13px;cursor:pointer;transition:.12s}
 .tabs button.on{background:var(--grad);color:#fff;border-color:transparent;box-shadow:var(--sh)}
 .only-mobile{display:none!important}
+.only-desktop{display:block}
 .bottomnav{display:none}
 .fab{display:none}
 
@@ -323,6 +326,9 @@ footer{text-align:center;color:var(--mut);padding:26px 16px 90px;font-size:13px}
   .layout{grid-template-columns:1fr}
   .calendar{grid-template-columns:repeat(2,1fr)}
   .only-mobile{display:flex!important}
+  .only-desktop{display:none!important}
+  /* sidebar tidak sticky di mobile (scroll halaman penuh) */
+  .side{position:static;max-height:none;overflow:visible}
   button.only-mobile{display:grid!important}
   .tabs.only-mobile{display:flex!important}
   .bottomnav.only-mobile{display:flex!important}

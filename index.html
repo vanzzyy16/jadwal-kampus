@@ -154,23 +154,8 @@
         </form>
       </div>
 
-      <!-- ===== PANDUAN BERNOMOR ===== -->
-      <details class="card guide-card" id="panduan" open>
-        <summary class="guide-head">
-          <span class="guide-ico">📖</span>
-          <h3>Panduan Cepat</h3>
-          <span class="guide-chev">▾</span>
-        </summary>
-        <ol class="guide-steps">
-          <li><b>Download jadwal</b> dari portal kampus kamu (SIA, Labkom, SISKA, dll) — biasanya format <code>Excel (.xlsx)</code> atau <code>CSV</code>.</li>
-          <li><b>Import file Teori</b> lewat zona drop di atas. Kolom terdeteksi otomatis (matkul, kode, sks, hari, jam, kelas, ruang, dosen).</li>
-          <li><b>Import file Praktikum</b> (opsional) jika jadwal lab ada di file terpisah.</li>
-          <li><b>Cek bentrok</b> — konflik jadwal (jam tumpang tindih di hari sama) ditandai merah otomatis.</li>
-          <li><b>Tambah manual</b> untuk kelas yang belum ada di Excel, atau edit dengan klik baris jadwal.</li>
-          <li><b>Ekspor</b> ke <b>ICS</b> (Google/Apple Calendar), <b>PNG</b> (gambar), <b>PDF</b> (cetak), atau <b>CSV</b>.</li>
-          <li><b>Tersimpan otomatis</b> di browser kamu — tutup tab, datanya tetap. Tanpa daftar, gratis.</li>
-        </ol>
-      </details>
+      <!-- Panduan ada di kolom utama (di bawah tabel) supaya sidebar tidak
+           terlalu tinggi dan menciptakan dead-space di bawah konten utama. -->
     </aside>
 
     <!-- ===== MAIN CONTENT ===== -->
@@ -209,6 +194,24 @@
           <button id="btnEmptyContoh" class="btn-primary sm">✨ Muat data contoh</button>
         </div>
       </div>
+
+      <!-- ===== PANDUAN BERNOMOR (di kolom utama, bawah) ===== -->
+      <details class="card guide-card" id="panduan" open>
+        <summary class="guide-head">
+          <span class="guide-ico">📖</span>
+          <h3>Panduan Cepat</h3>
+          <span class="guide-chev">▾</span>
+        </summary>
+        <ol class="guide-steps">
+          <li><b>Download jadwal</b> dari portal kampus kamu (SIA, Labkom, SISKA, dll) — biasanya format <code>Excel (.xlsx)</code> atau <code>CSV</code>.</li>
+          <li><b>Import file Teori</b> lewat zona drop di atas. Kolom terdeteksi otomatis (matkul, kode, sks, hari, jam, kelas, ruang, dosen).</li>
+          <li><b>Import file Praktikum</b> (opsional) jika jadwal lab ada di file terpisah.</li>
+          <li><b>Cek bentrok</b> — konflik jadwal (jam tumpang tindih di hari sama) ditandai merah otomatis.</li>
+          <li><b>Tambah manual</b> untuk kelas yang belum ada di Excel, atau edit dengan klik baris jadwal.</li>
+          <li><b>Ekspor</b> ke <b>ICS</b> (Google/Apple Calendar), <b>PNG</b> (gambar), <b>PDF</b> (cetak), atau <b>CSV</b>.</li>
+          <li><b>Tersimpan otomatis</b> di browser kamu — tutup tab, datanya tetap. Tanpa daftar, gratis.</li>
+        </ol>
+      </details>
     </section>
   </div>
 
