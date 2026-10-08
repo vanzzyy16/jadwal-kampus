@@ -1,14 +1,14 @@
 /* Jadwal Kampus — Service Worker
    Strategy:
    - Precache core shell on install (index.html, styles.css, app.js, fonts.css, icon.svg)
-   - Runtime: cache-first for fonts/images (immutable-ish)
-   - Runtime: stale-while-revalidate for CSS/JS (fast + fresh)
-   - Runtime: network-first for navigations (fresh when online, cache when offline)
-   - Excel/CDN libs (SheetJS, html2canvas) are cross-origin; we try network then
-     fall back to cached responses opportunistically (no-cors not needed since they
-     send CORS headers).
+   - Navigations: network-first (fresh when online, cache when offline)
+   - CSS/JS/SVG: NETWORK-FIRST (always serve the latest when online; stale-while-
+     revalidate caused users to see outdated CSS for a full session after a deploy)
+   - Fonts (woff2): cache-first (immutable, long-lived)
+   - CDN libs (SheetJS, html2canvas): network-first, cache fallback
+   - Bumping CACHE on every breaking change purges old entries on activate.
 */
-const CACHE = 'jk-v1';
+const CACHE = 'jk-v2';
 const CORE = [
   './',
   './index.html',
@@ -51,18 +51,20 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Same-origin static assets: stale-while-revalidate (CSS/JS/SVG).
+  // Same-origin static assets.
   if (url.origin === self.location.origin) {
+    // CSS/JS/SVG/webmanifest: NETWORK-FIRST so a fresh deploy is served on the
+    // very next load when online (stale-while-revalidate served the old sheet
+    // for a whole session). Falls back to cache only when offline.
     if (/\.(?:css|js|svg|webmanifest)$/.test(url.pathname)) {
       e.respondWith(
-        caches.open(CACHE).then(async c => {
-          const cached = await c.match(req);
-          const fetchPromise = fetch(req).then(res => {
-            if (res && res.ok) c.put(req, res.clone());
-            return res;
-          }).catch(() => cached);
-          return cached || fetchPromise;
-        })
+        fetch(req).then(res => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        }).catch(() => caches.match(req).then(r => r || Response.error()))
       );
       return;
     }
