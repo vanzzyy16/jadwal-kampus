@@ -576,7 +576,11 @@ $('btnEmptyContoh').addEventListener('click', muatContoh);
 $('btnExportICS').addEventListener('click', () => {
   if (!data.length) return toast('Belum ada data');
   const dayIdx = {Senin:1,Selasa:2,Rabu:3,Kamis:4,Jumat:5,Sabtu:6,Minggu:0};
+  // Lock events to Asia/Jakarta (WIB, UTC+7) so 08:00 stays 08:00 regardless of
+  // the importer's device timezone. We declare a full VTIMEZONE block (required by
+  // strict parsers like Outlook) and reference it via TZID on each VEVENT.
   let ics = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Jadwal-Kampus//ID\nCALSCALE:GREGORIAN\n';
+  ics += 'BEGIN:VTIMEZONE\nTZID:Asia/Jakarta\nBEGIN:STANDARD\nDTSTART:19700101T000000\nTZOFFSETFROM:+0700\nTZOFFSETTO:+0700\nEND:STANDARD\nEND:VTIMEZONE\n';
   const p2 = n => String(n).padStart(2,'0');
   const escICS = t => String(t||'').replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/[,;]/g,m=>'\\'+m);
   const stamp = new Date().toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
@@ -587,7 +591,7 @@ $('btnExportICS').addEventListener('click', () => {
     dt.setDate(dt.getDate() + diff);
     const d8 = dt.getFullYear() + p2(dt.getMonth()+1) + p2(dt.getDate());
     const jam = x => { const [a,b] = String(x||'').split(':'); return p2(+a||0)+p2(+(b||0))+'00'; };
-    ics += `BEGIN:VEVENT\nUID:${d.id}@jadwal-kampus\nDTSTAMP:${stamp}\nDTSTART:${d8}T${jam(d.mulai)}\nDTEND:${d8}T${jam(d.selesai)}\nSUMMARY:${escICS(d.matkul)}${d.kelas?' ('+escICS(d.kelas)+')':''}\nLOCATION:${escICS(d.ruang)}\nDESCRIPTION:${escICS(d.dosen)} ${escICS(d.kode)}\nRRULE:FREQ=WEEKLY;COUNT=16\nEND:VEVENT\n`;
+    ics += `BEGIN:VEVENT\nUID:${d.id}@jadwal-kampus\nDTSTAMP:${stamp}\nDTSTART;TZID=Asia/Jakarta:${d8}T${jam(d.mulai)}\nDTEND;TZID=Asia/Jakarta:${d8}T${jam(d.selesai)}\nSUMMARY:${escICS(d.matkul)}${d.kelas?' ('+escICS(d.kelas)+')':''}\nLOCATION:${escICS(d.ruang)}\nDESCRIPTION:${escICS(d.dosen)} ${escICS(d.kode)}\nRRULE:FREQ=WEEKLY;COUNT=16\nEND:VEVENT\n`;
   });
   ics += 'END:VCALENDAR';
   const a = document.createElement('a');
@@ -1022,3 +1026,12 @@ setInterval(() => {
   if (!data.some(d => d.hari === todayKey)) return; // nothing live to update
   render();
 }, 60000);
+
+/* ============================================================
+   PWA — register service worker for offline support
+   ============================================================ */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}

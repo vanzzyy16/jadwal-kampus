@@ -1,1 +1,18 @@
-{"name": "Jadwal Kampus", "short_name": "Jadwal Kampus", "description": "Jadwal kuliah gabungan teori+praktikum untuk semua kampus, cek bentrok otomatis, edit inline, ekspor ICS PNG PDF.", "start_url": ".", "display": "standalone", "background_color": "#eef1ff", "theme_color": "#4f46e5", "icons": [{"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]}
+{
+  "name": "Jadwal Kampus",
+  "short_name": "Jadwal Kampus",
+  "description": "Jadwal kuliah gabungan teori+praktikum untuk semua kampus, cek bentrok otomatis, edit inline, ekspor ICS PNG PDF.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#eef1ff",
+  "theme_color": "#4f46e5",
+  "lang": "id",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
+    {"src": "icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable"}
+  ]
+}
