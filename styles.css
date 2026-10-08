@@ -550,6 +550,94 @@ thead th{box-shadow:inset 0 -1px 0 var(--line)}
 /* smoother dark theme body bg transition */
 [data-theme=dark] body{transition:background .5s ease}
 
+/* ============================================================
+   BRUTAL v1 — hybrid neo-brutalism layer (tegas + modern)
+   spirit of ubgjadwal: border hitam tebal, shadow keras offset,
+   judul miring, hover "ditekan". Tapi tetap border-radius halus
+   & gradient accent kita -> hybrid, bukan kotak extreme.
+   ============================================================ */
+
+/* design tokens brutal */
+:root{
+  --bord:2px solid #11132b;        /* border hitam pekat */
+  --brutal-sh:5px 5px 0 #11132b;   /* shadow keras offset */
+  --brutal-sh-lg:7px 7px 0 #11132b;
+  --brutal-sh-sm:3px 3px 0 #11132b;
+  --radius-brutal:14px;
+}
+[data-theme=dark]{
+  --bord:2px solid #e9ebff;
+  --brutal-sh:5px 5px 0 #e9ebff;
+  --brutal-sh-lg:7px 7px 0 #e9ebff;
+  --brutal-sh-sm:3px 3px 0 #e9ebff;
+}
+
+/* KARTU: border tegas + shadow offset (bukan soft blur) */
+.card,.toolbar,.stat,.import-card{border:var(--bord);border-radius:var(--radius-brutal);box-shadow:var(--brutal-sh)}
+.card:hover,.stat:hover{box-shadow:var(--brutal-sh-lg)}
+
+/* HERO: tetap gradient tapi border tegas + judul miring */
+.hero-text{border:var(--bord);border-radius:20px;box-shadow:var(--brutal-sh-lg)}
+.hero h1{transform:rotate(-1deg);transform-origin:left center}
+.hero h1 span{transform:rotate(1.5deg)}
+
+/* TOMBOL: hover geser -1px + shadow muncul, active balik (efek tekan) */
+.btn-primary,.btn-ghost,.icon-btn{border:var(--bord);border-radius:12px;box-shadow:var(--brutal-sh-sm);transition:transform .14s ease,box-shadow .14s ease,filter .14s}
+.btn-primary:hover,.btn-ghost:hover,.icon-btn:hover{transform:translate(-2px,-2px);box-shadow:var(--brutal-sh)}
+.btn-primary:active,.btn-ghost:active,.icon-btn:active{transform:translate(1px,1px);box-shadow:var(--brutal-sh-sm)}
+.btn-primary.w{box-shadow:var(--brutal-sh)}
+
+/* DROP ZONE: border tegas + hover shadow muncul */
+.drop{border:var(--bord);border-radius:var(--radius-brutal);border-style:dashed;box-shadow:var(--brutal-sh-sm)}
+.drop:hover{box-shadow:var(--brutal-sh)}
+.drop.over{transform:translate(-2px,-2px) scale(1.01);box-shadow:var(--brutal-sh-lg);border-style:solid}
+.drop.filled{border-style:solid}
+
+/* CHIPS: brutal pill */
+.chip{border:var(--bord);border-radius:999px;box-shadow:2px 2px 0 #11132b}
+[data-theme=dark] .chip{box-shadow:2px 2px 0 #e9ebff}
+.chip:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 #11132b}
+[data-theme=dark] .chip:hover{box-shadow:3px 3px 0 #e9ebff}
+.chip.on{box-shadow:var(--brutal-sh-sm)}
+
+/* STAT accent bar lebih tegas */
+.stat::before{width:6px;border-radius:0 4px 4px 0}
+
+/* LOGO: brutal */
+.logo{border:var(--bord);box-shadow:var(--brutal-sh-sm)}
+
+/* calendar day columns: border tegas */
+.daycol{border:var(--bord);border-radius:var(--radius-brutal)}
+.daycol.today{box-shadow:var(--brutal-sh-sm)}
+
+/* alert: brutal */
+.alert{border:var(--bord);border-radius:var(--radius-brutal);box-shadow:var(--brutal-sh-sm)}
+
+/* modal: brutal */
+.modal-panel{border:var(--bord);box-shadow:var(--brutal-sh-lg)}
+
+/* segmented control brutal */
+.seg{border:var(--bord);border-radius:12px;box-shadow:var(--brutal-sh-sm)}
+.seg-btn.on{box-shadow:var(--brutal-sh-sm)}
+
+/* headings: letter-spacing tegas (Space Grotesk) */
+.card-head h3{letter-spacing:-.01em}
+
+/* FAB: brutal */
+.fab{border:var(--bord);box-shadow:var(--brutal-sh)}
+
+/* select/inputs: border tegas */
+.sel-wrap select,.search-row input,.card input,.card select{border:var(--bord)}
+.sel-wrap select:focus,.search-row input:focus,.card input:focus,.card select:focus{box-shadow:var(--brutal-sh-sm)}
+
+/* topbar: border bawah tegas */
+.topbar{border-bottom:var(--bord)}
+
+/* print: hilangkan shadow brutal */
+@media print{
+  *{box-shadow:none!important;border-color:#ccc!important}
+}
+
 /* input[type=time] + select consistent height */
 input[type=time],select{height:42px}
 
