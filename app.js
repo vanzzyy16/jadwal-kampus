@@ -117,7 +117,7 @@ function render() {
   const ab = $('alertBentrok');
   if (clash.size) {
     ab.classList.remove('hidden');
-    const pairs = groups.map(([a,b]) => `<li><b>${esc(a.matkul)}</b> (${esc(a.mulai)}–${esc(a.selesai)}) ↔ <b>${esc(b.matkul)}</b> (${esc(b.mulai)}–${esc(b.selesai)}) • ${esc(a.hari)}</li>`).join('');
+    const pairs = groups.map(([a,b]) => `<li><b>${esc(a.matkul)}</b> (${fmtTime(a.mulai)}–${fmtTime(a.selesai)}) ↔ <b>${esc(b.matkul)}</b> (${fmtTime(b.mulai)}–${fmtTime(b.selesai)}) • ${esc(a.hari)}</li>`).join('');
     ab.innerHTML = `<span class="alert-ico">⚠️</span><div class="alert-body"><b>${clash.size} kelas bentrok!</b> Baris merah bertabrakan jamnya di hari yang sama. Ubah jam / hapus salah satu.<details><summary>Lihat detail bentrok</summary><ul>${pairs}</ul></details></div>`;
   } else {
     ab.classList.add('hidden');
@@ -453,9 +453,15 @@ $('shareMenu').querySelectorAll('button').forEach(b => b.addEventListener('click
 /* ============================================================
    FILTERS
    ============================================================ */
+/* debounce render() so fast typing in search/filter doesn't thrash the DOM */
+let _renderRaf = 0;
+const renderDebounced = () => {
+  if (_renderRaf) cancelAnimationFrame(_renderRaf);
+  _renderRaf = requestAnimationFrame(() => { _renderRaf = 0; render(); });
+};
 ['q','fProdi','fKelas'].forEach(id => {
   const el = $(id); if (!el) return;
-  el.addEventListener('input', render);
+  el.addEventListener('input', renderDebounced);
   el.addEventListener('change', render);
 });
 // tipe chips (data-t)
@@ -700,9 +706,15 @@ function normDay(v){
   return normDayLoose(v);
 }
 function normTipe(v,def){
-  const s=String(v||'').toLowerCase();
-  if(/prak|lab|praktik/.test(s))return 'Praktikum';
-  if(/teo|kuliah|kelas/.test(s))return 'Teori';
+  const s=String(v||'').toLowerCase().trim();
+  if(!s)return def||'Teori';
+  // whole-word / boundary matching to avoid false positives
+  // (e.g. old /teo/ matched "video", "stereo"; /prak/ was fine)
+  if(/\b(prak|praktik|praktikum|lab|laboratorium|practic)\b/i.test(s))return 'Praktikum';
+  if(/\b(teo|teori|theory|kuliah|lecture|class|reguler)\b/i.test(s))return 'Teori';
+  // also match exact equals (case already lowered) for short codes like P/T
+  if(s==='p'||s==='pr')return 'Praktikum';
+  if(s==='t'||s==='th')return 'Teori';
   return def||'Teori';
 }
 function normTime(v){
@@ -985,13 +997,15 @@ armDrop('dropTeori','fileTeori');armDrop('dropPraktikum','filePraktikum');
 if(window.innerWidth>900)$('filterBody').classList.add('open');
 render();
 
-/* live update "hari ini" marker every minute — but skip when a modal is open
-   or the user is actively typing in a search field, to avoid disrupting them */
+/* live update "hari ini" + "LIVE now" marker every minute — but skip when a modal
+   is open, the tab is hidden, the user is typing, or there are no today's classes
+   (nothing to refresh), to avoid wasteful DOM rebuilds. */
 setInterval(() => {
   if (document.visibilityState !== 'visible') return;
-  if (!document.querySelector('.modal:not(.hidden)')) {
-    const ae = document.activeElement;
-    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA')) return;
-    render();
-  }
+  if (document.querySelector('.modal:not(.hidden)')) return;
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA')) return;
+  const todayKey = HARI[(new Date().getDay() + 6) % 7];
+  if (!data.some(d => d.hari === todayKey)) return; // nothing live to update
+  render();
 }, 60000);
