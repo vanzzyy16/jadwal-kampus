@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Jadwal Kampus — Atur Jadwal Kuliah Anti-Bentrok</title>
+<meta name="description" content="Jadwal Kampus: gabungkan jadwal kuliah teori (Excel/CSV) dan praktikum (Excel/CSV) jadi satu. Cek bentrok otomatis, ekspor PDF, ICS, PNG. Gratis, tanpa daftar, untuk semua kampus." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#4f46e5" />
+<meta property="og:title" content="Jadwal Kampus — Atur Jadwal Kuliah Anti-Bentrok" />
+<meta property="og:description" content="Gabungkan jadwal teori (Excel/CSV) dan praktikum (Excel/CSV) jadi satu. Cek bentrok otomatis, ekspor PDF, ICS, PNG." />
+<meta property="og:type" content="website" />
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+<!-- ============ TOPBAR ============ -->
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">🎓</span>
+      <div>
+        <b>Jadwal Kampus</b>
+        <small>jadwal kuliah • semua kampus</small>
+      </div>
+    </div>
+    <nav class="top-actions" aria-label="Aksi utama">
+      <button id="btnTheme" class="icon-btn" title="Mode gelap / terang" aria-label="Ganti tema">🌙</button>
+      <div class="menu-wrap">
+        <button id="btnShare" class="btn-primary sm" title="Bagikan / Ekspor">⬆ Bagikan ▾</button>
+        <div id="shareMenu" class="menu" role="menu" hidden>
+          <button id="btnExportICS" role="menuitem">📆 Kalender (ICS)</button>
+          <button id="btnExportPNG" role="menuitem">🖼️ Gambar (PNG)</button>
+          <button id="btnPrint" role="menuitem">🖨️ PDF / Cetak</button>
+          <button id="btnCSV" role="menuitem">📄 Data (CSV)</button>
+          <button id="btnContoh" role="menuitem">✨ Muat data contoh</button>
+        </div>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="hero-text">
+      <h1>Jadwal Kuliah <span>gabungan &amp; anti-bentrok.</span></h1>
+      <p>Gabungkan <b>Teori (Excel/CSV)</b> + <b>Praktikum (Excel/CSV)</b> kampus kamu jadi satu. Otomatis <b>cek bentrok</b>, filter prodi/kelas/hari, ekspor kalender.</p>
+      <div class="hero-badges">
+        <span>✓ Gratis</span><span>✓ Tanpa daftar</span><span>✓ Tersimpan otomatis</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span id="stTotal">0</span><label>Total Kelas</label></div>
+      <div class="stat info"><span id="stSKS">0</span><label>Total SKS</label></div>
+      <div class="stat danger"><span id="stBentrok">0</span><label>Bentrok</label></div>
+      <div class="stat ok"><span id="stHariIni">0</span><label>Hari ini</label></div>
+    </div>
+  </section>
+
+  <!-- ============ ALERT BENTROK ============ -->
+  <div id="alertBentrok" class="alert hidden" role="alert"></div>
+
+  <!-- ============ TOOLBAR / FILTER ============ -->
+  <section class="toolbar">
+    <div class="search-row">
+      <input id="q" placeholder="🔍 Cari matkul, dosen, kode, ruang..." aria-label="Cari jadwal" />
+      <button id="btnFilter" class="icon-btn only-mobile" title="Filter" aria-label="Tampilkan filter">🎛️</button>
+    </div>
+    <div id="filterBody" class="filter-body">
+      <div class="chip-row" id="chipHari" role="group" aria-label="Filter hari"></div>
+      <div class="chip-row" role="group" aria-label="Filter tipe">
+        <button class="chip on" data-t="">Semua</button>
+        <button class="chip" data-t="Teori">📖 Teori</button>
+        <button class="chip" data-t="Praktikum">🧪 Praktikum</button>
+      </div>
+      <div class="filter-row">
+        <label class="sel-wrap"><span class="sel-ico">🎓</span>
+          <select id="fProdi" aria-label="Filter prodi"><option value="">Semua Prodi</option></select>
+        </label>
+        <label class="sel-wrap"><span class="sel-ico">🏫</span>
+          <select id="fKelas" aria-label="Filter kelas"><option value="">Semua Kelas</option></select>
+        </label>
+      </div>
+      <div class="filter-row end">
+        <button id="btnReset" class="link-btn">↺ Reset filter</button>
+        <button id="btnHapus" class="link-btn danger">🗑️ Hapus semua</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LAYOUT ============ -->
+  <div class="layout">
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="side" id="sidebar">
+      <div class="card import-card">
+        <div class="import-head"><span class="import-ico">📚</span><h3>Import Teori</h3><span class="fmt">XLSX / CSV</span></div>
+        <p class="muted">Format kolom sama dengan praktikum.</p>
+        <label class="drop" for="fileTeori" id="dropTeori">📤 <b>Pilih file Teori</b><small>klik / drag ke sini (XLSX, XLS, CSV)</small></label>
+        <input type="file" id="fileTeori" class="file-hidden" accept=".xlsx,.xls,.csv" />
+        <div class="filerow"><span id="fileNameTeori" class="filename">Belum ada file dipilih</span></div>
+        <button id="btnTeori" class="btn-primary w">Proses Excel Teori</button>
+        <div id="previewTeori" class="preview" role="status" aria-live="polite"></div>
+        <div class="dl"><button id="btnTplTeori" class="link">⬇ template-teori.csv</button></div>
+      </div>
+
+      <div class="card import-card">
+        <div class="import-head"><span class="import-ico">🧪</span><h3>Import Praktikum</h3><span class="fmt">XLSX / CSV</span></div>
+        <p class="muted">Format kolom sama dengan teori.</p>
+        <label class="drop" for="filePraktikum" id="dropPraktikum">📤 <b>Pilih file Praktikum</b><small>klik / drag ke sini (XLSX, XLS, CSV)</small></label>
+        <input type="file" id="filePraktikum" class="file-hidden" accept=".xlsx,.xls,.csv" />
+        <div class="filerow"><span id="fileNamePraktikum" class="filename">Belum ada file dipilih</span></div>
+        <button id="btnPraktikum" class="btn-primary w">Proses Excel Praktikum</button>
+        <div id="previewPraktikum" class="preview" role="status" aria-live="polite"></div>
+        <div class="dl"><button id="btnTplPraktikum" class="link">⬇ template-praktikum.csv</button></div>
+      </div>
+
+      <div class="card form-card">
+        <h3>✍️ Tambah Manual</h3>
+        <form id="formAdd" autocomplete="off">
+          <input id="inMatkul" placeholder="Nama Matkul *" required />
+          <div class="row2"><input id="inKode" placeholder="Kode" /><input id="inSKS" type="number" min="0" max="8" value="2" /></div>
+          <div class="row2">
+            <select id="inHari" required><option value="">Hari *</option><option>Senin</option><option>Selasa</option><option>Rabu</option><option>Kamis</option><option>Jumat</option><option>Sabtu</option><option>Minggu</option></select>
+            <select id="inTipe"><option>Teori</option><option>Praktikum</option></select>
+          </div>
+          <div class="row2"><input id="inMulai" type="time" value="08:00" required /><input id="inSelesai" type="time" value="09:40" required /></div>
+          <div class="row2"><input id="inKelas" placeholder="Kelas" /><input id="inRuang" placeholder="Ruang" /></div>
+          <input id="inDosen" placeholder="Dosen" /><input id="inProdi" placeholder="Prodi" />
+          <button class="btn-primary w" type="submit">+ Tambah ke Jadwal</button>
+        </form>
+      </div>
+    </aside>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <section class="main">
+      <!-- mobile view tabs -->
+      <div class="tabs only-mobile" id="tabs" role="tablist">
+        <button data-tab="jadwal" class="on" role="tab">🗓️ Jadwal</button>
+        <button data-tab="tambah" role="tab">➕ Tambah</button>
+        <button data-tab="import" role="tab">📤 Import</button>
+      </div>
+
+      <div class="card" id="cardKalender">
+        <div class="card-head"><h3>🗓️ Kalender Mingguan</h3>
+          <div class="seg" role="group" aria-label="Tampilan kalender">
+            <button class="seg-btn on" data-view="grid" title="Grid mingguan">▦</button>
+            <button class="seg-btn" data-view="list" title="Daftar harian">☰</button>
+          </div>
+        </div>
+        <div id="calendar" class="calendar"></div>
+        <div id="calList" class="cal-list hidden"></div>
+      </div>
+
+      <div class="card" id="cardTabel">
+        <div class="card-head"><h3>📋 Jadwal Gabungan <span id="count" class="pill">0</span></h3>
+          <button id="btnSort" class="chip sm" title="Urutkan">↕ Urutkan</button>
+        </div>
+        <div class="table-wrap"><table id="tabel">
+          <thead><tr><th>Hari</th><th>Jam</th><th>Matkul</th><th>Kode</th><th>Dosen</th><th>Kelas</th><th>Ruang</th><th>Tipe</th><th></th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table></div>
+        <div id="cards" class="cards"></div>
+        <div id="emptyState" class="empty hidden">
+          <div class="empty-ico">📭</div>
+          <p class="empty-title">Belum ada jadwal</p>
+          <p class="muted">Tambah manual, upload Excel, atau muat data contoh.</p>
+          <button id="btnEmptyContoh" class="btn-primary sm">✨ Muat data contoh</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer><p>Jadwal Kampus • untuk semua kampus • data hanya di browser kamu • gratis tanpa daftar</p></footer>
+</main>
+
+<!-- ============ BOTTOM NAV (mobile) ============ -->
+<nav class="bottomnav only-mobile" aria-label="Navigasi mobile">
+  <button data-go="top" class="on">🏠<small>Beranda</small></button>
+  <button data-go="jadwal">🗓️<small>Jadwal</small></button>
+  <button data-go="tambah">➕<small>Tambah</small></button>
+  <button data-go="import">📤<small>Import</small></button>
+</nav>
+<button id="fab" class="fab only-mobile" title="Tambah cepat" aria-label="Tambah cepat">＋</button>
+
+<!-- ============ EDIT MODAL ============ -->
+<div id="modalEdit" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel">
+    <div class="modal-head">
+      <h3 id="editTitle">✏️ Edit Jadwal</h3>
+      <button class="icon-btn sm" data-close aria-label="Tutup">✕</button>
+    </div>
+    <form id="formEdit" autocomplete="off">
+      <input id="edMatkul" placeholder="Nama Matkul *" required />
+      <div class="row2"><input id="edKode" placeholder="Kode" /><input id="edSKS" type="number" min="0" max="8" value="2" /></div>
+      <div class="row2">
+        <select id="edHari" required><option value="">Hari *</option><option>Senin</option><option>Selasa</option><option>Rabu</option><option>Kamis</option><option>Jumat</option><option>Sabtu</option><option>Minggu</option></select>
+        <select id="edTipe"><option>Teori</option><option>Praktikum</option></select>
+      </div>
+      <div class="row2"><input id="edMulai" type="time" required /><input id="edSelesai" type="time" required /></div>
+      <div class="row2"><input id="edKelas" placeholder="Kelas" /><input id="edRuang" placeholder="Ruang" /></div>
+      <input id="edDosen" placeholder="Dosen" /><input id="edProdi" placeholder="Prodi" />
+      <div class="modal-foot">
+        <button type="button" id="edDuplikat" class="btn-ghost">📋 Duplikat</button>
+        <button type="button" id="edHapus" class="btn-ghost danger">🗑️ Hapus</button>
+        <button type="submit" class="btn-primary w">💾 Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ CONFIRM MODAL ============ -->
+<div id="modalConfirm" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel small">
+    <div class="modal-head"><h3 id="confirmTitle">Konfirmasi</h3></div>
+    <p id="confirmText" class="muted">Yakin?</p>
+    <div class="modal-foot">
+      <button type="button" class="btn-ghost" data-close>Batal</button>
+      <button type="button" id="confirmOk" class="btn-primary danger">Ya, lanjutkan</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

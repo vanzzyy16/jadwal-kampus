@@ -1,0 +1,5 @@
+.vercel
+node_modules
+serve.log
+*.png
+.playwright-mcp
