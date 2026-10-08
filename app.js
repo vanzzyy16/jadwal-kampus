@@ -663,6 +663,13 @@ $('btnExportPNG').addEventListener('click', () => {
         .table-wrap{ display:block !important; max-height:none !important; overflow:visible !important; }
         .cal-list{ display:flex !important; max-height:none !important; overflow:visible !important; }
         .cal-list.hidden{ display:flex !important; }
+        /* Resolve: tabel terpotong di PNG karena white-space:nowrap di th,td
+           memaksa lebar 886px > wrap 790px -> kolom Dosen/Kelas/Ruang/Tipe
+           hilang. Saat capture: izinkan wrap pada sel teks & paksa tabel lebar
+           penuh sehingga semua kolom muat tanpa scroller. */
+        table{ width:100% !important; table-layout:auto !important; }
+        th,td{ white-space:normal !important; word-break:break-word !important; }
+        td[colspan],.empty td{ white-space:normal !important; }
         /* html2canvas menangkap frame saat animasi masih berjalan (opacity:0
            pada awal rowIn/fadeUp) -> baris terlihat kosong/putih. Matikan semua
            animasi & paksa opacity penuh + transform nol di clone capture. */
