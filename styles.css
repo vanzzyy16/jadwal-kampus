@@ -341,9 +341,13 @@ footer{text-align:center;color:var(--mut);padding:26px 16px 90px;font-size:13px}
   .card{border:1px solid #ddd;break-inside:avoid;box-shadow:none;animation:none}
   .table-wrap{display:block!important;max-height:none;overflow:visible}
   .cards{display:none!important}
-  .cal-list{display:flex!important}
+  .cal-list,.cal-list.hidden{display:flex!important}
   .calendar{display:none!important}
   tr.bentrok{background:#fff0f0}
+  /* BUG-4.1/4.2: pastikan panel jadwal selalu terlihat saat cetak,
+     walau user sedang di tab 'tambah'/'import' di mobile */
+  #cardKalender,#cardTabel,#cardTambah,#cardImport{display:block!important;visibility:visible!important}
+  .cal-list{display:flex!important;max-height:none!important;overflow:visible!important}
 }
 
 /* reduce motion */

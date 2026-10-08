@@ -10,9 +10,19 @@ const $ = id => document.getElementById(id);
 const HARI = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
 
 const STORAGE_KEY = 'jadwal-kampus';
+const LEGACY_KEY = 'jadwalku';
 let data = [];
 try {
-  data = JSON.parse(localStorage.getItem(STORAGE_KEY) || localStorage.getItem('jadwalku') || '[]');
+  let raw = localStorage.getItem(STORAGE_KEY);
+  // BUG-6.2: one-time migration from legacy 'jadwalku' key, then remove it
+  if (raw === null) {
+    raw = localStorage.getItem(LEGACY_KEY);
+    if (raw) {
+      localStorage.setItem(STORAGE_KEY, raw);
+      localStorage.removeItem(LEGACY_KEY);
+    }
+  }
+  data = JSON.parse(raw || '[]');
   if (!Array.isArray(data)) data = [];
 } catch (e) { data = []; }
 
@@ -26,9 +36,10 @@ const save = () => {
 
 /* ---------- string / time utils ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const toMin = s => { const [a,b] = String(s||'').split(':').map(Number); if (isNaN(a)) return 0; return a*60 + (isNaN(b)?0:b); };
+const toMin = s => { const str=String(s??'').trim(); if(str===''||str===':')return NaN; const p=str.split(':').map(Number); if(isNaN(p[0]))return NaN; return p[0]*60 + (isNaN(p[1])?0:p[1]); };
+const sortMin = s => { const m=toMin(s); return isNaN(m)?Infinity:m; };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
-const fmtTime = s => String(s||'').slice(0,5);
+const fmtTime = s => esc(String(s??'').slice(0,5));
 
 /* ---------- toast ---------- */
 let toastTimer;
@@ -43,7 +54,9 @@ const toast = (m) => {
 /* ---------- bentrok detection ---------- */
 function bentrok(a, b) {
   if (a.hari !== b.hari) return false;
-  return toMin(a.mulai) < toMin(b.selesai) && toMin(b.mulai) < toMin(a.selesai);
+  const am=toMin(a.mulai),az=toMin(a.selesai),bm=toMin(b.mulai),bz=toMin(b.selesai);
+  if(isNaN(am)||isNaN(az)||isNaN(bm)||isNaN(bz))return false;
+  return am < bz && bm < az;
 }
 function tandaiBentrok(list) {
   const ids = new Set();
@@ -78,8 +91,8 @@ function filtered() {
       && (!k || d.kelas === k);
   }).sort((a,b) => {
     if (curSort === 'matkul') return (a.matkul||'').localeCompare(b.matkul||'');
-    if (curSort === 'mulai') return toMin(a.mulai) - toMin(b.mulai);
-    return HARI.indexOf(a.hari) - HARI.indexOf(b.hari) || toMin(a.mulai) - toMin(b.mulai);
+    if (curSort === 'mulai') return sortMin(a.mulai) - sortMin(b.mulai);
+    return HARI.indexOf(a.hari) - HARI.indexOf(b.hari) || sortMin(a.mulai) - sortMin(b.mulai);
   });
 }
 
@@ -114,11 +127,22 @@ function render() {
   const prodis = [...new Set(data.map(d => d.prodi).filter(Boolean))];
   const kelas = [...new Set(data.map(d => d.kelas).filter(Boolean))];
   const fp = $('fProdi'), fk = $('fKelas');
-  const vp = fp.value, vk = fk.value;
-  fp.innerHTML = '<option value="">🎓 Semua Prodi</option>' + prodis.map(p => `<option>${esc(p)}</option>`).join('');
-  fp.value = prodis.includes(vp) ? vp : '';
-  fk.innerHTML = '<option value="">🏫 Semua Kelas</option>' + kelas.map(p => `<option>${esc(p)}</option>`).join('');
-  fk.value = kelas.includes(vk) ? vk : '';
+  // BUG-1.3: only rebuild select innerHTML when the option SET actually changed,
+  // so an open dropdown doesn't collapse on every render() tick.
+  const pSig = '|' + prodis.join('|');
+  const kSig = '|' + kelas.join('|');
+  if (fp.dataset.sig !== pSig) {
+    fp.dataset.sig = pSig;
+    const vp = fp.value;
+    fp.innerHTML = '<option value="">🎓 Semua Prodi</option>' + prodis.map(p => `<option>${esc(p)}</option>`).join('');
+    fp.value = prodis.includes(vp) ? vp : '';
+  }
+  if (fk.dataset.sig !== kSig) {
+    fk.dataset.sig = kSig;
+    const vk = fk.value;
+    fk.innerHTML = '<option value="">🏫 Semua Kelas</option>' + kelas.map(p => `<option>${esc(p)}</option>`).join('');
+    fk.value = kelas.includes(vk) ? vk : '';
+  }
 
   /* --- day chips --- */
   const chips = $('chipHari');
@@ -146,7 +170,8 @@ function render() {
       ev.map(d => {
         const clashCls = clash.has(d.id) ? 'bentrok' : '';
         const prakCls = d.tipe === 'Praktikum' ? 'prak' : '';
-        const isNow = isToday && toMin(d.mulai) <= nowMin && nowMin < toMin(d.selesai) ? 'ev-now' : '';
+        const dm=toMin(d.mulai),dz=toMin(d.selesai);
+        const isNow = isToday && !isNaN(dm)&&!isNaN(dz) && dm <= nowMin && nowMin < dz ? 'ev-now' : '';
         return `<div class="ev ${prakCls} ${clashCls} ${isNow}" data-id="${d.id}" title="Klik untuk edit"><b>${fmtTime(d.mulai)} ${esc(d.matkul)}</b>${d.ruang?' • '+esc(d.ruang):''}${d.kelas?' • '+esc(d.kelas):''}</div>`;
       }).join('') + '</div>';
   }).join('');
@@ -154,7 +179,7 @@ function render() {
   /* --- calendar list view --- */
   const calList = $('calList');
   calList.innerHTML = HARI.map(h => {
-    const ev = list.filter(d => d.hari === h).sort((a,b) => toMin(a.mulai)-toMin(b.mulai));
+    const ev = list.filter(d => d.hari === h).sort((a,b) => sortMin(a.mulai)-sortMin(b.mulai));
     if (!ev.length) return '';
     return `<div class="cal-day-title">${esc(h)}</div>` +
       ev.map(d => `<div class="ev ${d.tipe==='Praktikum'?'prak':''} ${clash.has(d.id)?'bentrok':''}" data-id="${d.id}"><b>${fmtTime(d.mulai)}–${fmtTime(d.selesai)}</b> ${esc(d.matkul)}${d.ruang?' • '+esc(d.ruang):''}</div>`).join('');
@@ -201,6 +226,8 @@ function animateStat(id, target) {
   const el = $(id);
   const cur = parseInt(el.textContent) || 0;
   if (cur === target) return;
+  // BUG-1.2: cancel any in-flight animation on this element to avoid races
+  if (el._raf) cancelAnimationFrame(el._raf);
   const step = target > cur ? 1 : -1;
   const diff = Math.abs(target - cur);
   const stride = Math.max(1, Math.floor(diff / 12));
@@ -213,12 +240,13 @@ function animateStat(id, target) {
       el.style.animation = 'none';
       void el.offsetWidth; // force reflow
       el.style.animation = 'countUp .35s ease';
+      el._raf = 0;
       return;
     }
     el.textContent = v;
-    requestAnimationFrame(tick);
+    el._raf = requestAnimationFrame(tick);
   };
-  requestAnimationFrame(tick);
+  el._raf = requestAnimationFrame(tick);
 }
 
 /* ============================================================
@@ -228,7 +256,9 @@ $('formAdd').addEventListener('submit', e => {
   e.preventDefault();
   if (!$('inMatkul').value.trim()) return toast('Nama matkul wajib diisi');
   if (!$('inHari').value) return toast('Pilih hari dulu');
-  if (toMin($('inMulai').value) >= toMin($('inSelesai').value)) return toast('Jam selesai harus lebih besar dari jam mulai');
+  const am=toMin($('inMulai').value),az=toMin($('inSelesai').value);
+  if(isNaN(am)||isNaN(az))return toast('Jam mulai & selesai wajib diisi');
+  if (am >= az) return toast('Jam selesai harus lebih besar dari jam mulai');
   data.push({
     id: uid(), matkul: $('inMatkul').value.trim(), kode: $('inKode').value.trim(), sks: Math.min(8, Math.max(0, +$('inSKS').value || 0)),
     hari: $('inHari').value, tipe: $('inTipe').value, mulai: $('inMulai').value, selesai: $('inSelesai').value,
@@ -287,7 +317,9 @@ $('formEdit').addEventListener('submit', e => {
   if (!editingId) return;
   if (!$('edMatkul').value.trim()) return toast('Nama matkul wajib diisi');
   if (!$('edHari').value) return toast('Pilih hari dulu');
-  if (toMin($('edMulai').value) >= toMin($('edSelesai').value)) return toast('Jam selesai harus > jam mulai');
+  const em=toMin($('edMulai').value),ez=toMin($('edSelesai').value);
+  if(isNaN(em)||isNaN(ez))return toast('Jam mulai & selesai wajib diisi');
+  if (em >= ez) return toast('Jam selesai harus > jam mulai');
   const d = data.find(x => x.id === editingId);
   if (!d) { closeModal('modalEdit'); return; }
   Object.assign(d, {
@@ -318,13 +350,37 @@ $('edHapus').addEventListener('click', () => {
 /* ============================================================
    MODAL helpers
    ============================================================ */
+// BUG-2.5/7.2: focus trap inside open modal
+let _trapHandler = null;
+function installFocusTrap(modal) {
+  if (_trapHandler) document.removeEventListener('keydown', _trapHandler);
+  _trapHandler = (e) => {
+    if (e.key !== 'Tab') return;
+    const f = modal.querySelectorAll('input,select,textarea,button,a[href],[tabindex]:not([tabindex="-1"])');
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+  document.addEventListener('keydown', _trapHandler);
+  // focus first field shortly after open
+  setTimeout(() => {
+    const f = modal.querySelector('input,select,textarea');
+    if (f) f.focus();
+  }, 50);
+}
+function removeFocusTrap() {
+  if (_trapHandler) { document.removeEventListener('keydown', _trapHandler); _trapHandler = null; }
+}
 function openModal(id) {
   $(id).classList.remove('hidden');
   document.body.style.overflow = 'hidden';
+  installFocusTrap($(id));
 }
 function closeModal(id) {
   $(id).classList.add('hidden');
   document.body.style.overflow = '';
+  removeFocusTrap();
   if (id === 'modalEdit') editingId = null;
 }
 document.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', e => {
@@ -445,12 +501,13 @@ document.querySelectorAll('.seg-btn[data-view]').forEach(b => b.addEventListener
 /* ============================================================
    MOBILE TABS / NAV
    ============================================================ */
-function goTab(t) {
+function goTab(t, silent) {
   // "top" (Beranda) = tampilkan view jadwal lalu scroll ke atas
   const view = t === 'top' ? 'jadwal' : t;
   document.body.dataset.mtab = view;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === view));
   document.querySelectorAll('.bottomnav button').forEach(b => b.classList.toggle('on', b.dataset.go === t));
+  if (silent) return;
   if (t === 'top') window.scrollTo({ top: 0, behavior: 'smooth' });
   else if (t === 'jadwal') $('cardTabel').scrollIntoView({ behavior: 'smooth' });
   else if (t === 'tambah') {
@@ -461,7 +518,8 @@ function goTab(t) {
 document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => goTab(b.dataset.tab)));
 document.querySelectorAll('.bottomnav button').forEach(b => b.addEventListener('click', () => goTab(b.dataset.go)));
 $('fab').addEventListener('click', () => goTab('tambah'));
-document.body.dataset.mtab = 'jadwal';
+// BUG-1.1: init — set tab state + highlight bottom-nav without scrolling on load
+goTab('jadwal', true);
 
 /* ============================================================
    TEMPLATES & CSV EXPORT
@@ -469,7 +527,8 @@ document.body.dataset.mtab = 'jadwal';
 const HEADER = 'matkul,kode,sks,hari,tipe,mulai,selesai,kelas,ruang,dosen,prodi';
 const unduhCSV = (nama, isi) => {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([isi], { type: 'text/csv;charset=utf-8' }));
+  // BUG-4.7: prepend UTF-8 BOM so Excel opens Indonesian accents correctly
+  a.href = URL.createObjectURL(new Blob(['﻿' + isi], { type: 'text/csv;charset=utf-8' }));
   a.download = nama; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
@@ -479,8 +538,9 @@ $('btnTplPraktikum').addEventListener('click', () => unduhCSV('template-praktiku
   HEADER + '\nPraktikum Pemrograman Web,IF301P,1,Selasa,Praktikum,08:00,10:30,TI-3A,Lab-2,Andi Wijaya,Teknologi Informasi\nPraktikum Basis Data,IF302P,1,Kamis,Praktikum,13:00,15:30,TI-3A,Lab-1,Siti Aminah,Teknologi Informasi\nPraktikum Algoritma,IF303P,1,Jumat,Praktikum,08:00,10:30,TI-3A,Lab-3,Budi Santoso,Teknologi Informasi'));
 
 $('btnCSV').addEventListener('click', () => {
-  if (!data.length) return toast('Belum ada data');
-  const r = data.map(d => [d.matkul,d.kode,d.sks,d.hari,d.tipe,d.mulai,d.selesai,d.kelas,d.ruang,d.dosen,d.prodi].map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(','));
+  const scope = filtered();
+  if (!scope.length) return toast('Belum ada data (sesuai filter)');
+  const r = scope.map(d => [d.matkul,d.kode,d.sks,d.hari,d.tipe,d.mulai,d.selesai,d.kelas,d.ruang,d.dosen,d.prodi].map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(','));
   unduhCSV('jadwal-kampus.csv', [HEADER, ...r].join('\n'));
   toast('CSV diunduh ✓');
 });
@@ -538,10 +598,13 @@ $('btnExportPNG').addEventListener('click', () => {
   if (typeof html2canvas === 'undefined') return toast('Pustaka gambar belum termuat — cek internet');
 
   // Pastikan konten tabel/kartu tampil untuk capture (di mobile tabel disembunyikan)
-  const prevTableDisp = target.querySelector('.table-wrap')?.style.display;
-  if (window.innerWidth <= 900 && target.querySelector('.table-wrap')) {
-    target.querySelector('.table-wrap').style.display = 'block';
-    target.querySelector('#cards').style.display = 'none';
+  const tw = target.querySelector('.table-wrap');
+  const cards = target.querySelector('#cards');
+  const prevTableDisp = tw?.style.display;
+  const prevCardsDisp = cards?.style.display;
+  if (window.innerWidth <= 900 && tw) {
+    tw.style.display = 'block';
+    if (cards) cards.style.display = 'none';
   }
 
   html2canvas(target, {
@@ -549,6 +612,10 @@ $('btnExportPNG').addEventListener('click', () => {
     scale: Math.min(3, window.devicePixelRatio * 2 || 2),
     useCORS: true,
     logging: false,
+    width: target.scrollWidth,
+    height: target.scrollHeight,
+    windowWidth: target.scrollWidth,
+    windowHeight: target.scrollHeight,
     // PAKSA TEMA TERANG saat capture supaya di dark mode gambar tidak jadi hitam.
     // onclone memberi salinan DOM terpisah; kita ubah salinan itu, bukan layar asli.
     onclone: (doc) => {
@@ -578,14 +645,19 @@ $('btnExportPNG').addEventListener('click', () => {
         .card-head,#tbody,#calendar{ background:#ffffff !important; }
         thead{ background:#eef2ff !important; }
         .muted{ color:#6b7194 !important; }
+        /* BUG-4.3/4.4: pastikan card & tabel tidak disembunyikan/dipotong saat capture */
+        #cardTabel,#cardKalender{ display:block !important; visibility:visible !important; }
+        .table-wrap{ display:block !important; max-height:none !important; overflow:visible !important; }
+        .cal-list{ display:flex !important; max-height:none !important; overflow:visible !important; }
+        .cal-list.hidden{ display:flex !important; }
       `;
       root.appendChild(style);
     }
   }).then(c => {
     // kembalikan tampilan seperti semula
-    if (window.innerWidth <= 900 && target.querySelector('.table-wrap')) {
-      if (prevTableDisp !== undefined) target.querySelector('.table-wrap').style.display = prevTableDisp;
-      target.querySelector('#cards').style.display = '';
+    if (window.innerWidth <= 900 && tw) {
+      if (prevTableDisp !== undefined) tw.style.display = prevTableDisp;
+      if (cards) cards.style.display = prevCardsDisp;
     }
     const a = document.createElement('a');
     a.href = c.toDataURL('image/png');
@@ -593,9 +665,9 @@ $('btnExportPNG').addEventListener('click', () => {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast('PNG diunduh 🖼️');
   }).catch(() => {
-    if (window.innerWidth <= 900 && target.querySelector('.table-wrap')) {
-      if (prevTableDisp !== undefined) target.querySelector('.table-wrap').style.display = prevTableDisp;
-      target.querySelector('#cards').style.display = '';
+    if (window.innerWidth <= 900 && tw) {
+      if (prevTableDisp !== undefined) tw.style.display = prevTableDisp;
+      if (cards) cards.style.display = prevCardsDisp;
     }
     toast('Gagal ekspor PNG — coba PDF / Cetak');
   });
@@ -652,7 +724,7 @@ function splitTimes(v){
 function cellText(v){
   if(v==null||v==='')return '';
   if(typeof v==='boolean')return v?'Ya':'';
-  if(v instanceof Date&&!isNaN(v))return String(v.getHours()).padStart(2,'0')+':'+String(v.getMinutes()).padStart(2,'0');
+  if(v instanceof Date&&!isNaN(v))return String(v.getUTCHours()).padStart(2,'0')+':'+String(v.getUTCMinutes()).padStart(2,'0');
   if(typeof v==='number'){
     if(!isFinite(v))return '';
     if(v>0&&v<1){const m=Math.round(v*24*60);return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
@@ -686,7 +758,13 @@ function detectHeader(rows){
     const hits=keys.filter(k=>row.some(c=>c===k||c.startsWith(k+' ')||c.startsWith(k+'/')||c.endsWith(' '+k)||c.includes(' '+k+' '))).length;
     if(hits>bestHits){bestHits=hits;best=i}
   }
-  return bestHits>=2?best:0;
+  // require at least 3 distinct known headers AND more hits than any other row
+  if(bestHits<3)return 0;
+  // also reject pure-title rows: a real header row has multiple short header cells,
+  // a title row usually has one long cell with the rest empty
+  const hdr=(rows[best]||[]).map(x=>normHead(x)).filter(x=>x!=='');
+  if(hdr.length<3)return 0;
+  return best;
 }
 function parseCSVText(t){
   t=String(t||'').replace(/^\uFEFF/,'');
@@ -786,7 +864,10 @@ function importRows(rows,tipeDefault){
       // otherwise leave blank (rendered as '-' / unknown) instead of forcing Senin.
       hari = lastHari || '';
     }
-    if(toMin(tm2)<=toMin(tm1)){const t=tm1;tm1=tm2;tm2=t}
+    const tm1m=toMin(tm1),tm2m=toMin(tm2);
+    if(!isNaN(tm1m)&&!isNaN(tm2m)&&tm2m<tm1m){const t=tm1;tm1=tm2;tm2=t}
+    // BUG-3.4: a data row must have at least one valid time — otherwise it's not a class
+    if(isNaN(tm1m)&&isNaN(tm2m)){lewat++;continue}
     let sks=parseInt(String(g('sks')).replace(',','.'),10);if(isNaN(sks))sks=tipeDefault==='Praktikum'?1:2;
     data.push({id:uid(),matkul,kode:g('kode'),sks,hari,tipe:normTipe(g('tipe'),tipeDefault),mulai:tm1,selesai:tm2,kelas:g('kelas'),ruang:g('ruang'),dosen:g('dosen'),prodi:g('prodi')});
     n++;

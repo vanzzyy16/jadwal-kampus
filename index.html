@@ -12,6 +12,20 @@
 <link rel="apple-touch-icon" href="icon.svg" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#4f46e5" />
+<!-- BUG-6.1: cegah FOUC — set tema sebelum CSS render supaya tidak ada flash putih/gelap -->
+<script>
+  (function(){
+    try{
+      var t=localStorage.getItem('jk-theme');
+      if(t!=='dark'&&t!=='light'&&window.matchMedia){
+        t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+      }
+      var m=document.querySelector('meta[name="theme-color"]');
+      document.documentElement.dataset.theme=t||'light';
+      if(m)m.setAttribute('content',t==='dark'?'#0a0a14':'#4f46e5');
+    }catch(e){}
+  })();
+</script>
 <meta property="og:title" content="Jadwal Kampus — Atur Jadwal Kuliah Anti-Bentrok" />
 <meta property="og:description" content="Gabungkan jadwal teori (Excel/CSV) dan praktikum (Excel/CSV) jadi satu. Cek bentrok otomatis, ekspor PDF, ICS, PNG." />
 <meta property="og:type" content="website" />
@@ -103,7 +117,7 @@
         <div class="import-head"><span class="import-ico">📚</span><h3>Import Teori</h3><span class="fmt">XLSX / CSV</span></div>
         <p class="muted">Format kolom sama dengan praktikum.</p>
         <label class="drop" for="fileTeori" id="dropTeori">📤 <b>Pilih file Teori</b><small>klik / drag ke sini (XLSX, XLS, CSV)</small></label>
-        <input type="file" id="fileTeori" class="file-hidden" accept=".xlsx,.xls,.csv" />
+        <input type="file" id="fileTeori" class="file-hidden" accept=".xlsx,.xls,.csv" aria-label="Pilih file teori (XLSX, XLS, CSV)" />
         <div class="filerow"><span id="fileNameTeori" class="filename">Belum ada file dipilih</span></div>
         <button id="btnTeori" class="btn-primary w">Proses Excel Teori</button>
         <div id="previewTeori" class="preview" role="status" aria-live="polite"></div>
@@ -114,7 +128,7 @@
         <div class="import-head"><span class="import-ico">🧪</span><h3>Import Praktikum</h3><span class="fmt">XLSX / CSV</span></div>
         <p class="muted">Format kolom sama dengan teori.</p>
         <label class="drop" for="filePraktikum" id="dropPraktikum">📤 <b>Pilih file Praktikum</b><small>klik / drag ke sini (XLSX, XLS, CSV)</small></label>
-        <input type="file" id="filePraktikum" class="file-hidden" accept=".xlsx,.xls,.csv" />
+        <input type="file" id="filePraktikum" class="file-hidden" accept=".xlsx,.xls,.csv" aria-label="Pilih file praktikum (XLSX, XLS, CSV)" />
         <div class="filerow"><span id="fileNamePraktikum" class="filename">Belum ada file dipilih</span></div>
         <button id="btnPraktikum" class="btn-primary w">Proses Excel Praktikum</button>
         <div id="previewPraktikum" class="preview" role="status" aria-live="polite"></div>
@@ -124,15 +138,15 @@
       <div class="card form-card">
         <h3>✍️ Tambah Manual</h3>
         <form id="formAdd" autocomplete="off">
-          <input id="inMatkul" placeholder="Nama Matkul *" required />
-          <div class="row2"><input id="inKode" placeholder="Kode" /><input id="inSKS" type="number" min="0" max="8" value="2" /></div>
+          <input id="inMatkul" placeholder="Nama Matkul *" required aria-label="Nama mata kuliah" />
+          <div class="row2"><input id="inKode" placeholder="Kode" aria-label="Kode mata kuliah" /><input id="inSKS" type="number" min="0" max="8" value="2" aria-label="Jumlah SKS" /></div>
           <div class="row2">
-            <select id="inHari" required><option value="">Hari *</option><option>Senin</option><option>Selasa</option><option>Rabu</option><option>Kamis</option><option>Jumat</option><option>Sabtu</option><option>Minggu</option></select>
-            <select id="inTipe"><option>Teori</option><option>Praktikum</option></select>
+            <select id="inHari" required aria-label="Hari"><option value="">Hari *</option><option>Senin</option><option>Selasa</option><option>Rabu</option><option>Kamis</option><option>Jumat</option><option>Sabtu</option><option>Minggu</option></select>
+            <select id="inTipe" aria-label="Tipe mata kuliah"><option>Teori</option><option>Praktikum</option></select>
           </div>
-          <div class="row2"><input id="inMulai" type="time" value="08:00" required /><input id="inSelesai" type="time" value="09:40" required /></div>
-          <div class="row2"><input id="inKelas" placeholder="Kelas" /><input id="inRuang" placeholder="Ruang" /></div>
-          <input id="inDosen" placeholder="Dosen" /><input id="inProdi" placeholder="Prodi" />
+          <div class="row2"><input id="inMulai" type="time" value="08:00" required aria-label="Jam mulai" /><input id="inSelesai" type="time" value="09:40" required aria-label="Jam selesai" /></div>
+          <div class="row2"><input id="inKelas" placeholder="Kelas" aria-label="Kelas" /><input id="inRuang" placeholder="Ruang" aria-label="Ruang" /></div>
+          <input id="inDosen" placeholder="Dosen" aria-label="Dosen pengajar" /><input id="inProdi" placeholder="Prodi" aria-label="Program studi" />
           <button class="btn-primary w" type="submit">+ Tambah ke Jadwal</button>
         </form>
       </div>
@@ -182,10 +196,10 @@
 
 <!-- ============ BOTTOM NAV (mobile) ============ -->
 <nav class="bottomnav only-mobile" aria-label="Navigasi mobile">
-  <button data-go="top" class="on">🏠<small>Beranda</small></button>
-  <button data-go="jadwal">🗓️<small>Jadwal</small></button>
-  <button data-go="tambah">➕<small>Tambah</small></button>
-  <button data-go="import">📤<small>Import</small></button>
+  <button data-go="top" class="on" aria-label="Beranda">🏠<small>Beranda</small></button>
+  <button data-go="jadwal" aria-label="Jadwal">🗓️<small>Jadwal</small></button>
+  <button data-go="tambah" aria-label="Tambah jadwal">➕<small>Tambah</small></button>
+  <button data-go="import" aria-label="Import file">📤<small>Import</small></button>
 </nav>
 <button id="fab" class="fab only-mobile" title="Tambah cepat" aria-label="Tambah cepat">＋</button>
 
@@ -198,15 +212,15 @@
       <button class="icon-btn sm" data-close aria-label="Tutup">✕</button>
     </div>
     <form id="formEdit" autocomplete="off">
-      <input id="edMatkul" placeholder="Nama Matkul *" required />
-      <div class="row2"><input id="edKode" placeholder="Kode" /><input id="edSKS" type="number" min="0" max="8" value="2" /></div>
+      <input id="edMatkul" placeholder="Nama Matkul *" required aria-label="Nama mata kuliah" />
+      <div class="row2"><input id="edKode" placeholder="Kode" aria-label="Kode mata kuliah" /><input id="edSKS" type="number" min="0" max="8" value="2" aria-label="Jumlah SKS" /></div>
       <div class="row2">
-        <select id="edHari" required><option value="">Hari *</option><option>Senin</option><option>Selasa</option><option>Rabu</option><option>Kamis</option><option>Jumat</option><option>Sabtu</option><option>Minggu</option></select>
-        <select id="edTipe"><option>Teori</option><option>Praktikum</option></select>
+        <select id="edHari" required aria-label="Hari"><option value="">Hari *</option><option>Senin</option><option>Selasa</option><option>Rabu</option><option>Kamis</option><option>Jumat</option><option>Sabtu</option><option>Minggu</option></select>
+        <select id="edTipe" aria-label="Tipe mata kuliah"><option>Teori</option><option>Praktikum</option></select>
       </div>
-      <div class="row2"><input id="edMulai" type="time" required /><input id="edSelesai" type="time" required /></div>
-      <div class="row2"><input id="edKelas" placeholder="Kelas" /><input id="edRuang" placeholder="Ruang" /></div>
-      <input id="edDosen" placeholder="Dosen" /><input id="edProdi" placeholder="Prodi" />
+      <div class="row2"><input id="edMulai" type="time" required aria-label="Jam mulai" /><input id="edSelesai" type="time" required aria-label="Jam selesai" /></div>
+      <div class="row2"><input id="edKelas" placeholder="Kelas" aria-label="Kelas" /><input id="edRuang" placeholder="Ruang" aria-label="Ruang" /></div>
+      <input id="edDosen" placeholder="Dosen" aria-label="Dosen pengajar" /><input id="edProdi" placeholder="Prodi" aria-label="Program studi" />
       <div class="modal-foot">
         <button type="button" id="edDuplikat" class="btn-ghost">📋 Duplikat</button>
         <button type="button" id="edHapus" class="btn-ghost danger">🗑️ Hapus</button>
