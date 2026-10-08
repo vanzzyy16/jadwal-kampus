@@ -527,6 +527,12 @@ $('fab').addEventListener('click', () => goTab('tambah'));
 // BUG-1.1: init — set tab state + highlight bottom-nav without scrolling on load
 goTab('jadwal', true);
 
+/* panduan: default terbuka di desktop, tertutup di mobile (hemat ruang) */
+(function(){
+  const g = $('panduan');
+  if (g && window.innerWidth <= 900) g.removeAttribute('open');
+})();
+
 /* ============================================================
    TEMPLATES & CSV EXPORT
    ============================================================ */
