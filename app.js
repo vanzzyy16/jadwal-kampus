@@ -655,6 +655,9 @@ $('btnExportPNG').addEventListener('click', () => {
         .card-head,#tbody,#calendar{ background:#ffffff !important; }
         thead{ background:#eef2ff !important; }
         .muted{ color:#6b7194 !important; }
+        /* html2canvas can't render background-clip:text (gradient headings) —
+           it would export as invisible text; force a solid ink color instead. */
+        .card-head h3{ background:none !important; -webkit-text-fill-color:#131536 !important; -webkit-background-clip:border-box !important; background-clip:border-box !important; color:#131536 !important; }
         /* BUG-4.3/4.4: pastikan card & tabel tidak disembunyikan/dipotong saat capture */
         #cardTabel,#cardKalender{ display:block !important; visibility:visible !important; }
         .table-wrap{ display:block !important; max-height:none !important; overflow:visible !important; }
