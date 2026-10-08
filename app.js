@@ -520,7 +520,6 @@ $('btnExportPNG').addEventListener('click', () => {
   if (typeof html2canvas === 'undefined') return toast('Pustaka gambar belum termuat — cek internet');
 
   // Pastikan konten tabel/kartu tampil untuk capture (di mobile tabel disembunyikan)
-  const wasTableHidden = target.querySelector('.table-wrap')?.style.display === 'none';
   const prevTableDisp = target.querySelector('.table-wrap')?.style.display;
   if (window.innerWidth <= 900 && target.querySelector('.table-wrap')) {
     target.querySelector('.table-wrap').style.display = 'block';
@@ -575,7 +574,7 @@ $('btnExportPNG').addEventListener('click', () => {
     a.download = 'jadwal-kampus.png'; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast('PNG diunduh 🖼️');
-  }).catch((e) => {
+  }).catch(() => {
     if (window.innerWidth <= 900 && target.querySelector('.table-wrap')) {
       if (prevTableDisp !== undefined) target.querySelector('.table-wrap').style.display = prevTableDisp;
       target.querySelector('#cards').style.display = '';
