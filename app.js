@@ -518,13 +518,70 @@ $('btnExportPNG').addEventListener('click', () => {
   toast('Membuat gambar... ⏳');
   const target = $('cardTabel');
   if (typeof html2canvas === 'undefined') return toast('Pustaka gambar belum termuat — cek internet');
-  // ensure cards/table visible for capture
-  html2canvas(target, { backgroundColor: getComputedStyle(document.body).getPropertyValue('--card').trim() || '#fff', scale: 2 }).then(c => {
+
+  // Pastikan konten tabel/kartu tampil untuk capture (di mobile tabel disembunyikan)
+  const wasTableHidden = target.querySelector('.table-wrap')?.style.display === 'none';
+  const prevTableDisp = target.querySelector('.table-wrap')?.style.display;
+  if (window.innerWidth <= 900 && target.querySelector('.table-wrap')) {
+    target.querySelector('.table-wrap').style.display = 'block';
+    target.querySelector('#cards').style.display = 'none';
+  }
+
+  html2canvas(target, {
+    backgroundColor: '#ffffff',
+    scale: Math.min(3, window.devicePixelRatio * 2 || 2),
+    useCORS: true,
+    logging: false,
+    // PAKSA TEMA TERANG saat capture supaya di dark mode gambar tidak jadi hitam.
+    // onclone memberi salinan DOM terpisah; kita ubah salinan itu, bukan layar asli.
+    onclone: (doc) => {
+      const root = doc.documentElement;
+      root.setAttribute('data-theme', 'light');
+      // override CSS variables di root clone agar pasti terang
+      const style = doc.createElement('style');
+      style.textContent = `
+        [data-theme="light"]{
+          --bg:#eef1ff;--bg2:#f8f9ff;--bg3:#eef2ff;--card:#ffffff;
+          --ink:#131536;--ink2:#3a3d63;--mut:#6b7194;--line:#e5e8fb;
+          --acc:#4f46e5;--acc2:#7c3aed;--ok:#059669;--dan:#dc2626;
+          --info:#0ea5e9;--ok-bg:#ecfdf5;--dan-bg:#fef2f2;--info-bg:#f0f9ff;
+        }
+        *{ background-color:transparent !important; box-shadow:none !important; }
+        .card{ background-color:#ffffff !important; }
+        .table-wrap,#cards,.jcard,.stat,.toolbar,#cardTabel{ background-color:#ffffff !important; }
+        tbody tr:hover{ background:#f8f9ff !important; }
+        .ev{ background:linear-gradient(135deg,#131536,#2b2e6b) !important; color:#fff !important; }
+        .ev.prak{ background:linear-gradient(135deg,#4f46e5,#7c3aed) !important; }
+        .ev.bentrok{ background:linear-gradient(135deg,#dc2626,#991b1b) !important; }
+        .badge.Teori{ background:#f0f9ff !important; color:#0369a1 !important; }
+        .badge.Praktikum{ background:#f5f3ff !important; color:#6d28d9 !important; }
+        tr.bentrok{ background:#fef2f2 !important; }
+        .jcard.bentrok{ background:#fef2f2 !important; }
+        .pill{ background:linear-gradient(135deg,#4f46e5,#7c3aed) !important; color:#fff !important; }
+        .card-head,#tbody,#calendar{ background:#ffffff !important; }
+        thead{ background:#eef2ff !important; }
+        .muted{ color:#6b7194 !important; }
+      `;
+      root.appendChild(style);
+    }
+  }).then(c => {
+    // kembalikan tampilan seperti semula
+    if (window.innerWidth <= 900 && target.querySelector('.table-wrap')) {
+      if (prevTableDisp !== undefined) target.querySelector('.table-wrap').style.display = prevTableDisp;
+      target.querySelector('#cards').style.display = '';
+    }
     const a = document.createElement('a');
     a.href = c.toDataURL('image/png');
     a.download = 'jadwal-kampus.png'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast('PNG diunduh 🖼️');
-  }).catch(() => toast('Gagal ekspor PNG — coba PDF / Cetak'));
+  }).catch((e) => {
+    if (window.innerWidth <= 900 && target.querySelector('.table-wrap')) {
+      if (prevTableDisp !== undefined) target.querySelector('.table-wrap').style.display = prevTableDisp;
+      target.querySelector('#cards').style.display = '';
+    }
+    toast('Gagal ekspor PNG — coba PDF / Cetak');
+  });
 });
 
 $('btnPrint').addEventListener('click', () => window.print());
