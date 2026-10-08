@@ -1,1 +1,1 @@
-{"name": "jadwal-kampus", "version": "2.0.0", "private": true, "scripts": {"dev": "npx serve .", "deploy": "npx vercel --prod"}}
+{"name": "jadwal-kampus", "version": "2.1.0", "private": true, "scripts": {"dev": "npx serve .", "deploy": "npx vercel --prod", "test": "node test-e2e.cjs"}}

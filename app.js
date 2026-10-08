@@ -739,8 +739,11 @@ function cellText(v){
   if(v instanceof Date&&!isNaN(v))return String(v.getUTCHours()).padStart(2,'0')+':'+String(v.getUTCMinutes()).padStart(2,'0');
   if(typeof v==='number'){
     if(!isFinite(v))return '';
+    // v>0 && v<1 = Excel time fraction (e.g. 0.375 = 09:00). Convert to HH:MM.
     if(v>0&&v<1){const m=Math.round(v*24*60);return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
-    if(Number.isInteger(v)&&v>=1&&v<=7)return['','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'][v];
+    // NOTE: integer 1-7 is NOT auto-converted to a day name here — that would
+    // corrupt SKS values 1-7. Day-from-number is handled by normDay() at the
+    // hari column read site instead. (BUG found via E2E test: SKS=3 -> 'Rabu'.)
     return String(v);
   }
   return String(v).trim().replace(/\s+/g,' ');
@@ -837,9 +840,19 @@ function importRows(rows,tipeDefault){
     const hariRaw=g('hari');
     const hariCell=normDay(hariRaw);
     let hari=hariCell||'';
-    // If this row is ONLY a day name (row-per-day header), remember it and skip as data
-    const onlyDay = hariCell && !matkul && r.filter(c=>cellText(c)!=='').every(c=>normDay(cellText(c)) || !cellText(c));
-    if (onlyDay) { lastHari=hariCell; continue; }
+    // If this row is ONLY a day name (row-per-day header), remember it and skip as data.
+    // hariCell comes from the hari column when it exists; if there's no hari column,
+    // also scan the matkul cell / row blob for a standalone day name.
+    const dayFromRow = hariCell || (!hasHariCol ? (normDay(matkul) || '') : '');
+    const onlyDay = dayFromRow && !matkul && r.filter(c=>cellText(c)!=='').every(c=>normDay(cellText(c)) || !cellText(c));
+    if (onlyDay) { lastHari=dayFromRow; continue; }
+    // also catch: no hari column but the row's matkul cell IS just a day name
+    if (!hasHariCol && !hariCell && matkul) {
+      const mDay = normDay(matkul);
+      if (mDay && r.filter(c=>cellText(c)!=='').every(c=>normDay(cellText(c)) || !cellText(c))) {
+        lastHari=mDay; continue;
+      }
+    }
     // carry last day down when the hari cell is blank/merged
     if (hasHariCol && !hariCell && hariRaw === '') hari = lastHari || '';
     // --- end HARI ---
