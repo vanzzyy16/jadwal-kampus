@@ -116,6 +116,12 @@
   <div class="layout">
     <!-- ===== SIDEBAR ===== -->
     <aside class="side" id="sidebar">
+      <!-- mode toggle: Manual vs Auto Kode MK -->
+      <div class="seg mode-seg" role="group" aria-label="Mode input jadwal">
+        <button class="seg-btn on" data-mode="manual" title="Import manual per file">✍️ Manual</button>
+        <button class="seg-btn" data-mode="auto" title="Auto-filter dari Kode MK">⚡ Kode MK</button>
+      </div>
+
       <div class="card import-card">
         <div class="import-head"><span class="import-ico">📚</span><h3>Import Teori</h3><span class="fmt">XLSX / CSV</span></div>
         <p class="muted">Format kolom sama dengan praktikum.</p>
@@ -136,6 +142,22 @@
         <button id="btnPraktikum" class="btn-primary w">Proses Excel Praktikum</button>
         <div id="previewPraktikum" class="preview" role="status" aria-live="polite"></div>
         <div class="dl"><button id="btnTplPraktikum" class="link">⬇ template-praktikum.csv</button></div>
+      </div>
+
+      <!-- ===== AUTO KODE MK (mode cepat: upload master + ketik kode) ===== -->
+      <div class="card auto-card" id="cardAuto">
+        <div class="import-head"><span class="import-ico">🗂️</span><h3>Auto Kode MK</h3><span class="fmt">MODE CEPAT</span></div>
+        <p class="muted">Upload jadwal lengkap kampus (semua kelas), lalu ketik kode MK yang kamu ambil. Jadwal otomatis tersusun.</p>
+        <label class="drop" for="fileMaster" id="dropMaster">📤 <b>Pilih file jadwal lengkap</b><small>Excel/CSV semua kelas dari Labkom/SIA</small></label>
+        <input type="file" id="fileMaster" class="file-hidden" accept=".xlsx,.xls,.csv" aria-label="Pilih file jadwal lengkap kampus" />
+        <div class="filerow"><span id="fileNameMaster" class="filename">Belum ada file</span></div>
+        <button id="btnMaster" class="btn-primary w">Proses Master</button>
+        <div id="previewMaster" class="preview" role="status" aria-live="polite"></div>
+        <label class="muted" for="kodeInput">Masukkan Kode MK <small>(satu per baris / koma)</small></label>
+        <textarea id="kodeInput" rows="5" placeholder="IF301&#10;IF302&#10;IF301P" aria-label="Daftar kode mata kuliah"></textarea>
+        <button id="btnParseKode" class="btn-primary w">🔍 Parse Kode</button>
+        <div id="kodeResult" class="kode-result" role="status" aria-live="polite"></div>
+        <div class="dl"><button id="btnClearMaster" class="link danger">🗑️ Hapus master</button></div>
       </div>
 
       <div class="card form-card">

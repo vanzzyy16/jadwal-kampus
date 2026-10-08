@@ -34,12 +34,38 @@ const save = () => {
   catch (e) { toast('Penyimpanan penuh — hapus jadwal lama'); }
 };
 
+/* ---------- MASTER + KODE MK (auto mode) ---------- */
+const MASTER_KEY = 'jadwal-master';
+const PICKS_KEY = 'jadwal-kodepicks';
+let master = [];
+let kodePicks = []; // [{kode, kelas}]  — kelas='' berarti belum dipilih (multi)
+const saveMaster = () => { try { localStorage.setItem(MASTER_KEY, JSON.stringify(master)); } catch (e) {} };
+const savePicks = () => { try { localStorage.setItem(PICKS_KEY, JSON.stringify(kodePicks)); } catch (e) {} };
+try {
+  let m = localStorage.getItem(MASTER_KEY); master = JSON.parse(m || '[]'); if (!Array.isArray(master)) master = [];
+} catch (e) { master = []; }
+try {
+  let p = localStorage.getItem(PICKS_KEY); kodePicks = JSON.parse(p || '[]'); if (!Array.isArray(kodePicks)) kodePicks = [];
+} catch (e) { kodePicks = []; }
+
 /* ---------- string / time utils ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const toMin = s => { const str=String(s??'').trim(); if(str===''||str===':')return NaN; const p=str.split(':').map(Number); if(isNaN(p[0]))return NaN; return p[0]*60 + (isNaN(p[1])?0:p[1]); };
 const sortMin = s => { const m=toMin(s); return isNaN(m)?Infinity:m; };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 const fmtTime = s => esc(String(s??'').slice(0,5));
+/* normalisasi kode MK: uppercase + strip dash/spasi/titik/underscore
+   supaya "IF301","if301","IF-301","IF 301" semua cocok.
+   (kode disimpan as-is oleh importRows — hanya trim+collapse — jadi
+   matching WAJIB pakai normalisasi ini.) */
+const normKode = s => String(s??'').toUpperCase().replace(/[\s\-_.]/g,'');
+/* parse textarea daftar kode: split baris/koma/titik-koma, trim, normalize, dedupe */
+const parseKodeInput = text => {
+  const seen = new Set();
+  return String(text||'').split(/[\n,;]+/).map(s=>normKode(s)).filter(Boolean).filter(k => {
+    if (seen.has(k)) return false; seen.add(k); return true;
+  });
+};
 
 /* ---------- toast ---------- */
 let toastTimer;
@@ -534,6 +560,65 @@ goTab('jadwal', true);
 })();
 
 /* ============================================================
+   AUTO KODE MK — regen jadwal personal dari master + kode pilihan
+   ============================================================ */
+/* index master by normalized kode → array of master rows (lintas kelas) */
+function buildMasterIndex() {
+  const idx = {};
+  for (const d of master) {
+    const k = normKode(d.kode);
+    if (!k) continue;
+    (idx[k] = idx[k] || []).push(d);
+  }
+  return idx;
+}
+/* regenerasi data[] dari master[] + kodePicks[].
+   - kode yang cocok 1 kelas & pick.kelas kosong → auto-ambil
+   - kode multi-kelas & pick.kelas kosong → TIDAK masuk (tunggu user pilih)
+   - kode multi-kelas & pick.kelas dipilih → ambil kelas itu saja
+   - kode tidak ada di master → skip (diangkat peringatan di renderKodeResult) */
+function regenFromMaster() {
+  if (!master.length) return;
+  const idx = buildMasterIndex();
+  const out = [];
+  for (const pick of kodePicks) {
+    const rows = idx[pick.kode] || [];
+    if (!rows.length) continue;
+    if (pick.kelas) {
+      const m = rows.filter(r => normKode(r.kelas) === normKode(pick.kelas));
+      if (m.length) out.push(...m.map(cloneRow));
+      else out.push(...rows.map(cloneRow)); // fallback: kelas hilang → ambil semua
+    } else if (rows.length === 1) {
+      out.push(cloneRow(rows[0])); // unambiguous → auto-ambil
+    }
+    // rows.length>1 & no kelas picked → skip (tunggu pilihan)
+  }
+  data = out; save(); render();
+}
+function cloneRow(d) {
+  const c = Object.assign({}, d); c.id = uid(); return c;
+}
+/* render #kodeResult: tampilkan status tiap kode (✓ hijau / ✗ merah / pilih-kelas) */
+function renderKodeResult() {
+  const box = $('kodeResult');
+  if (!box) return;
+  if (!kodePicks.length) { box.innerHTML = ''; return; }
+  const idx = buildMasterIndex();
+  box.innerHTML = kodePicks.map((pick, i) => {
+    const rows = idx[pick.kode] || [];
+    if (!rows.length) {
+      return `<div class="kode-entry err"><span class="kode-chip bad">✗ ${esc(pick.kode)}</span><small>tidak ditemukan di master</small></div>`;
+    }
+    if (rows.length === 1) {
+      const r = rows[0];
+      return `<div class="kode-entry ok"><span class="kode-chip good">✓ ${esc(r.kode||pick.kode)}</span><b>${esc(r.matkul)}</b><small>${esc(r.kelas||'-')} • ${esc(r.hari||'-')} • ${fmtTime(r.mulai)}–${fmtTime(r.selesai)}</small></div>`;
+    }
+    // multi-kelas → dropdown
+    const opts = rows.map(r => `<option value="${esc(r.kelas||'')}" ${normKode(r.kelas)===normKode(pick.kelas)?'selected':''}>${esc(r.kelas||'-')} • ${esc(r.dosen||'-')} • ${fmtTime(r.mulai)}</option>`).join('');
+    return `<div class="kode-entry pick"><span class="kode-chip multi">${esc(pick.kode)} ×${rows.length}</span><select class="kode-sel" data-ki="${i}"><option value="">— pilih kelas —</option>${opts}</select></div>`;
+  }).join('');
+}
+/* ============================================================
    TEMPLATES & CSV EXPORT
    ============================================================ */
 const HEADER = 'matkul,kode,sks,hari,tipe,mulai,selesai,kelas,ruang,dosen,prodi';
@@ -575,6 +660,53 @@ $('btnContoh').addEventListener('click', () => {
   else muatContoh();
 });
 $('btnEmptyContoh').addEventListener('click', muatContoh);
+
+/* ============================================================
+   AUTO KODE MK — wiring tombol & mode toggle
+   ============================================================ */
+/* mode toggle: Manual vs Auto Kode MK */
+document.querySelectorAll('.seg-btn[data-mode]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.seg-btn[data-mode]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  document.body.dataset.mode = b.dataset.mode;
+  if (b.dataset.mode === 'auto') renderKodeResult();
+}));
+document.body.dataset.mode = 'manual';
+
+/* import master: reuse importExcel dengan intoMaster=true */
+$('btnMaster').addEventListener('click', () => importExcel('fileMaster','previewMaster','dropMaster','Teori','master',true));
+
+/* parse kode dari textarea → set kodePicks → render result → regen */
+$('btnParseKode').addEventListener('click', () => {
+  if (!master.length) return toast('Import file master dulu (jadwal lengkap kampus)');
+  const kodes = parseKodeInput($('kodeInput').value);
+  if (!kodes.length) return toast('Masukkan minimal 1 kode MK');
+  // preserve kelas picks yang sudah dipilih untuk kode yang sama
+  const prev = {}; kodePicks.forEach(p => prev[p.kode] = p.kelas);
+  kodePicks = kodes.map(k => ({ kode: k, kelas: prev[k] || '' }));
+  savePicks();
+  renderKodeResult();
+  regenFromMaster();
+  toast(kodes.length + ' kode di-parse ✓');
+});
+/* event delegation: pilih kelas via dropdown di #kodeResult */
+$('kodeResult').addEventListener('change', e => {
+  const sel = e.target.closest('.kode-sel');
+  if (!sel) return;
+  const i = +sel.dataset.ki;
+  if (kodePicks[i]) { kodePicks[i].kelas = sel.value; savePicks(); regenFromMaster(); }
+});
+/* hapus master */
+$('btnClearMaster').addEventListener('click', () => {
+  if (!master.length && !kodePicks.length) return toast('Master sudah kosong');
+  openConfirm('Hapus master & kode?', `File master (${master.length} baris) dan daftar kode akan dihapus. Jadwal personal TIDAK dihapus.`, () => {
+    master = []; kodePicks = []; saveMaster(); savePicks();
+    $('kodeInput').value = ''; $('previewMaster').textContent = ''; $('fileNameMaster').textContent = 'Belum ada file';
+    paintDrop('dropMaster', null);
+    renderKodeResult();
+    toast('Master & kode dihapus ✓');
+  });
+});
 
 /* ============================================================
    ICS & PNG EXPORT
@@ -847,7 +979,8 @@ const COLS={
   dosen:['nama dosen','dosen','pengajar','pengampu','lecturer'],
   prodi:['program studi','prodi','jurusan','fakultas','program']
 };
-function importRows(rows,tipeDefault){
+function importRows(rows,tipeDefault,target){
+  if(!Array.isArray(target))target=data;
   const hi=detectHeader(rows);
   const head=(rows[hi]||[]).map(x=>String(x??'').toLowerCase().trim());
   const ix={};for(const k in COLS)ix[k]=aliasIdx(head,COLS[k]);
@@ -926,7 +1059,7 @@ function importRows(rows,tipeDefault){
     // BUG-3.4: a data row must have at least one valid time — otherwise it's not a class
     if(isNaN(tm1m)&&isNaN(tm2m)){lewat++;continue}
     let sks=parseInt(String(g('sks')).replace(',','.'),10);if(isNaN(sks))sks=tipeDefault==='Praktikum'?1:2;
-    data.push({id:uid(),matkul,kode:g('kode'),sks,hari,tipe:normTipe(g('tipe'),tipeDefault),mulai:tm1,selesai:tm2,kelas:g('kelas'),ruang:g('ruang'),dosen:g('dosen'),prodi:g('prodi')});
+    target.push({id:uid(),matkul,kode:g('kode'),sks,hari,tipe:normTipe(g('tipe'),tipeDefault),mulai:tm1,selesai:tm2,kelas:g('kelas'),ruang:g('ruang'),dosen:g('dosen'),prodi:g('prodi')});
     n++;
   }
   return{n,lewat,headerRow:hi};
@@ -935,7 +1068,7 @@ function importRows(rows,tipeDefault){
 /* ============================================================
    IMPORT EXCEL/CSV
    ============================================================ */
-function importExcel(fileId,previewId,dropId,tipeDefault,tipeLabel){
+function importExcel(fileId,previewId,dropId,tipeDefault,tipeLabel,intoMaster){
   const f=$(fileId).files[0];
   if(!f)return toast('Pilih file Excel/CSV dulu untuk '+tipeLabel);
   if(typeof XLSX==='undefined'){toast('Pustaka Excel belum termuat — cek internet lalu refresh');return}
@@ -959,10 +1092,19 @@ function importExcel(fileId,previewId,dropId,tipeDefault,tipeLabel){
         rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true,blankrows:false});
       }
       if(!rows||!rows.length)throw new Error('file kosong / tidak terbaca');
-      const r=importRows(rows,tipeDefault);
-      reset();save();render();
-      $(previewId).textContent='✓ '+r.n+' baris '+tipeLabel+' ditambahkan.'+(r.lewat?' ('+r.lewat+' tanpa nama dilewati)':'')+(r.headerRow>0?' (header baris '+(r.headerRow+1)+')':'');
-      toast(r.n?r.n+' jadwal '+tipeLabel+' ditambahkan ✓':'Tidak ada baris valid — cek format kolom');
+      if(intoMaster){
+        master=[];
+        const r=importRows(rows,tipeDefault,master);
+        reset();saveMaster();
+        $(previewId).textContent='✓ '+r.n+' baris master tersimpan.'+(r.lewat?' ('+r.lewat+' dilewati)':'');
+        toast(r.n?r.n+' baris master tersimpan ✓':'Tidak ada baris valid');
+        if(kodePicks.length)regenFromMaster();
+      }else{
+        const r=importRows(rows,tipeDefault,data);
+        reset();save();render();
+        $(previewId).textContent='✓ '+r.n+' baris '+tipeLabel+' ditambahkan.'+(r.lewat?' ('+r.lewat+' tanpa nama dilewati)':'')+(r.headerRow>0?' (header baris '+(r.headerRow+1)+')':'');
+        toast(r.n?r.n+' jadwal '+tipeLabel+' ditambahkan ✓':'Tidak ada baris valid — cek format kolom');
+      }
     }catch(err){
       reset();
       $(previewId).textContent='✗ GAGAL: '+err.message;
@@ -978,7 +1120,7 @@ $('btnPraktikum').addEventListener('click',()=>importExcel('filePraktikum','prev
    DRAG & DROP
    ============================================================ */
 // store the drop zone <-> file input mapping so the ✕ clear button works
-const DROP_MAP = { dropTeori:'fileTeori', dropPraktikum:'filePraktikum' };
+const DROP_MAP = { dropTeori:'fileTeori', dropPraktikum:'filePraktikum', dropMaster:'fileMaster' };
 function paintDrop(dropId,file){
   const el=$(dropId);if(!el)return;
   if(file){
@@ -990,7 +1132,9 @@ function paintDrop(dropId,file){
     // restore the original placeholder label
     const label = dropId==='dropTeori'
       ? '📤 <b>Pilih file Teori</b><small>klik / drag ke sini (XLSX, XLS, CSV)</small>'
-      : '📤 <b>Pilih file Praktikum</b><small>klik / drag ke sini (XLSX, XLS, CSV)</small>';
+      : dropId==='dropPraktikum'
+      ? '📤 <b>Pilih file Praktikum</b><small>klik / drag ke sini (XLSX, XLS, CSV)</small>'
+      : '📤 <b>Pilih file jadwal lengkap</b><small>Excel/CSV semua kelas dari Labkom/SIA</small>';
     el.innerHTML=label;
   }
 }
@@ -998,8 +1142,8 @@ function clearFile(dropId){
   const inputId=DROP_MAP[dropId]; if(!inputId)return;
   const inp=$(inputId); try{inp.value=''}catch(_){}
   paintDrop(dropId,null);
-  const prevId = dropId==='dropTeori'?'previewTeori':'previewPraktikum';
-  const fnId = dropId==='dropTeori'?'fileNameTeori':'fileNamePraktikum';
+  const map={dropTeori:['previewTeori','fileNameTeori'],dropPraktikum:['previewPraktikum','fileNamePraktikum'],dropMaster:['previewMaster','fileNameMaster']};
+  const [prevId,fnId]=map[dropId]||['',''];
   $(prevId).textContent='';
   $(fnId).textContent='Belum ada file dipilih';
   $(fnId).classList.remove('ok');
@@ -1010,7 +1154,7 @@ function friendlySize(b){
   if(b<1048576)return (b/1024).toFixed(0)+' KB';
   return (b/1048576).toFixed(1)+' MB';
 }
-[['fileTeori','previewTeori','dropTeori','fileNameTeori'],['filePraktikum','previewPraktikum','dropPraktikum','fileNamePraktikum']].forEach(([f,p,d,fn])=>{
+[['fileTeori','previewTeori','dropTeori','fileNameTeori'],['filePraktikum','previewPraktikum','dropPraktikum','fileNamePraktikum'],['fileMaster','previewMaster','dropMaster','fileNameMaster']].forEach(([f,p,d,fn])=>{
   $(f).addEventListener('change',()=>{
     const file=$(f).files[0];paintDrop(d,file);
     if(file){
@@ -1027,14 +1171,14 @@ function armDrop(dropId,inputId){
     const fl=e.dataTransfer&&e.dataTransfer.files;
     if(fl&&fl.length){
       $(inputId).files=fl;paintDrop(dropId,fl[0]);
-      const prev=inputId==='fileTeori'?'previewTeori':'previewPraktikum';
-      const fn=inputId==='fileTeori'?'fileNameTeori':'fileNamePraktikum';
+      const map={fileTeori:['previewTeori','fileNameTeori'],filePraktikum:['previewPraktikum','fileNamePraktikum'],fileMaster:['previewMaster','fileNameMaster']};
+      const [prev,fn]=map[inputId]||['',''];
       $(prev).textContent='Siap diproses: '+fl[0].name+' — klik tombol Proses.';
       $(fn).textContent=fl[0].name;$(fn).classList.add('ok');
     }
   });
 }
-armDrop('dropTeori','fileTeori');armDrop('dropPraktikum','filePraktikum');
+armDrop('dropTeori','fileTeori');armDrop('dropPraktikum','filePraktikum');armDrop('dropMaster','fileMaster');
 
 /* ============================================================
    INIT
