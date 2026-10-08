@@ -663,6 +663,12 @@ $('btnExportPNG').addEventListener('click', () => {
         .table-wrap{ display:block !important; max-height:none !important; overflow:visible !important; }
         .cal-list{ display:flex !important; max-height:none !important; overflow:visible !important; }
         .cal-list.hidden{ display:flex !important; }
+        /* html2canvas menangkap frame saat animasi masih berjalan (opacity:0
+           pada awal rowIn/fadeUp) -> baris terlihat kosong/putih. Matikan semua
+           animasi & paksa opacity penuh + transform nol di clone capture. */
+        *,*::before,*::after{ animation:none !important; animation-delay:0s !important; transition:none !important; }
+        tbody tr,.jcard,.card,.stat span,.daycol.today,.empty-ico,.ev.bentrok,.jcard.bentrok{ opacity:1 !important; transform:none !important; }
+        .toast{ opacity:0 !important; }
       `;
       root.appendChild(style);
     }
