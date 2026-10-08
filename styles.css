@@ -638,6 +638,37 @@ thead th{box-shadow:inset 0 -1px 0 var(--line)}
   *{box-shadow:none!important;border-color:#ccc!important}
 }
 
+/* Tahap 3: brutal polish untuk elemen yang masih soft */
+/* jadwal cards (mobile/tablet) — brutal */
+.jcard{border:var(--bord);border-left:6px solid var(--acc);box-shadow:var(--brutal-sh-sm)}
+.jcard:hover{transform:translate(-1px,-1px);box-shadow:var(--brutal-sh)}
+
+/* event kalender — border tegas tipis (ev tetap compact) */
+.ev{border:2px solid rgba(0,0,0,.25)!important;border-radius:9px}
+.ev:hover{box-shadow:var(--brutal-sh-sm)}
+[data-theme=dark] .ev{border:2px solid rgba(255,255,255,.2)!important}
+
+/* pill (counter) — brutal */
+.pill{border:var(--bord);box-shadow:var(--brutal-sh-sm)}
+
+/* badge tipe — brutal */
+.badge{border:var(--bord);box-shadow:1px 1px 0 var(--bord)}
+
+/* hero badges — brutal */
+.hero-badges span{border:var(--bord);box-shadow:var(--brutal-sh-sm);background:#ffffff26}
+.hero-badges span:hover{transform:translate(-1px,-1px);box-shadow:var(--brutal-sh)}
+
+/* mobile tabs — brutal */
+#tabs button{border:var(--bord);box-shadow:var(--brutal-sh-sm)}
+#tabs button.on{box-shadow:var(--brutal-sh)}
+
+/* bottom nav — brutal */
+.bottomnav button{border-top:var(--bord);box-shadow:var(--brutal-sh-sm)}
+.bottomnav button.on{box-shadow:var(--brutal-sh-sm)}
+
+/* empty state ico — brutal float */
+.empty-ico{filter:drop-shadow(2px 2px 0 var(--bord))}
+
 /* ============================================================
    PANDUAN BERNOMOR — collapsible numbered guide (Tahap 2)
    ============================================================ */
