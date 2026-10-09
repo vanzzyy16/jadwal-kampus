@@ -8,7 +8,7 @@
    - CDN libs (SheetJS, html2canvas): network-first, cache fallback
    - Bumping CACHE on every breaking change purges old entries on activate.
 */
-const CACHE = 'jk-v3';
+const CACHE = 'jk-v4';
 const CORE = [
   './',
   './index.html',

@@ -133,15 +133,12 @@
 
       <div class="card import-card" id="cardImport">
         <div class="import-head"><span class="import-ico">📥</span><h3>Import Jadwal</h3><span class="fmt">XLSX / CSV / PDF</span></div>
-        <p class="muted">Satu file bisa berisi Teori &amp; Praktikum — tipe terdeteksi otomatis. Bila kolom tipe kosong, pakai default di bawah. Maks 4 file sekaligus.</p>
+        <p class="muted">Satu file boleh berisi <b>Teori &amp; Praktikum</b> sekaligus — tipe <b>dipindai otomatis</b> dari kolom tipe, nama matkul, lalu akhiran kode (mis. IF301P). Tidak ada pilihan default. Maks 4 file.</p>
         <label class="drop" for="fileJadwal" id="dropJadwal">📤 <b>Pilih file jadwal</b><small>klik / drag ke sini (XLSX, XLS, CSV, PDF) — maks 4 file</small></label>
         <input type="file" id="fileJadwal" class="file-hidden" accept=".xlsx,.xls,.csv,.pdf" multiple aria-label="Pilih file jadwal (XLSX, XLS, CSV, PDF), maks 4 file" />
         <div class="filerow">
           <span id="fileNameJadwal" class="filename">Belum ada file dipilih</span>
-          <select id="tipeDefaultSel" class="sel" aria-label="Tipe default bila kolom tipe kosong">
-            <option value="Teori">Default: Teori</option>
-            <option value="Praktikum">Default: Praktikum</option>
-          </select>
+          <span class="auto-badge" title="Teori &amp; praktikum dipindai otomatis dari isi file">🔎 Auto-scan Teori + Praktikum</span>
         </div>
         <button id="btnImport" class="btn-primary w">Proses File</button>
         <div id="previewJadwal" class="preview" role="status" aria-live="polite"></div>

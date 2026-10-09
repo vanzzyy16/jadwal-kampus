@@ -50,11 +50,25 @@ try {
 } catch (e) { kodePicks = []; }
 
 /* ---------- IMPORT ANTI-DUPLIKAT (file tetap setelah proses, tahan reload) ----------
-   Setiap file yang sukses diproses dicatat di processedFiles (Set). Key = name|size|lastModified
-   supaya file SAMA (nama+ukuran+timestamp) tak bisa diproses dua kali — klik Proses ulang
-   atau re-upload file identik = dilewati. Persisten di localStorage agar tahan reload.
-   Dibersihkan saat "Hapus semua" supaya user bisa re-import dari nol. */
+   Setiap file yang sukses diproses dicatat di processedFiles (Set), key = HASH ISI file.
+   Hash isi (bukan name|size|lastModified) supaya file yang sama tapi di-rename atau
+   di-download ulang (lastModified berubah) tetap terdeteksi duplikat. Persisten di
+   localStorage agar tahan reload. Dibersihkan saat "Hapus semua". */
 const PROC_KEY = 'jk-processed';
+// Hash 64-bit (FNV-1a x2 + panjang) atas isi file. Dipakai untuk anti-duplikat:
+// nama file bisa diubah / file di-download ulang (lastModified lain) tapi isinya sama.
+/* ponytail: hash 64-bit cukup — bukan untuk keamanan, hanya penanda duplikat.
+   Kalau nanti butuh tahan tabrakan, ganti ke SHA-256 via crypto.subtle. */
+function hashBytes(u8){
+  let h1=0x811c9dc5,h2=0x01000193;
+  for(let i=0;i<u8.length;i++){
+    const b=u8[i];
+    h1^=b;h1=Math.imul(h1,0x01000193)>>>0;
+    h2=(h2+b)>>>0;h2=Math.imul(h2,0x85ebca6b)>>>0;
+  }
+  return (h1>>>0).toString(16).padStart(8,'0')+(h2>>>0).toString(16).padStart(8,'0')+'-'+u8.length.toString(16);
+}
+// fileKey dipakai sebagai fallback bila hash belum tersedia (mis. file gagal dibaca).
 const fileKey = f => `${f.name}|${f.size}|${f.lastModified}`;
 let processedFiles = new Set((() => { try { return JSON.parse(localStorage.getItem(PROC_KEY)) || []; } catch (e) { return []; } })());
 const saveProcessed = () => { try { localStorage.setItem(PROC_KEY, JSON.stringify([...processedFiles])); } catch (e) {} };
@@ -1257,8 +1271,33 @@ function normDayLoose(s){
   if(w.startsWith('sab')||w.startsWith('sap'))return 'Sabtu';
   return 'Minggu';
 }
+// Ambil nama hari yang TERTANAM di dalam sel campuran, mis. "Senin, 08:00-10:30",
+// "Selasa 10.30-13.00", atau "Senin/08:00". Dipakai saat kolom hari tidak ada
+// atau kosong — tanpa ini seluruh baris kehilangan harinya. Sengaja butuh nama
+// hari UTUH (bukan 3 huruf) agar tidak salah tangkap nama matkul seperti
+// "Selisih" / "Rabdasan" (bug lama yang membuat semua jadi Senin).
+function dayInCell(s){
+  const t=String(s||'').toLowerCase();
+  const m=t.match(/\b(senin|selasa|slasa|rabu|kamis|jumat|sabtu|saptu|minggu|ahad)\b/);
+  if(!m)return '';
+  const w=m[1];
+  if(w.startsWith('sen'))return 'Senin';
+  if(w.startsWith('sel')||w==='slasa')return 'Selasa';
+  if(w.startsWith('rab'))return 'Rabu';
+  if(w.startsWith('kam'))return 'Kamis';
+  if(w.startsWith('jum'))return 'Jumat';
+  if(w.startsWith('sab')||w.startsWith('sap'))return 'Sabtu';
+  return 'Minggu';
+}
 function normDay(v){
-  const s=String(v||'').toLowerCase().replace(/[^a-z]/g,'');
+  // Excel sering menyimpan kolom "Hari" sebagai ANGKA 1-7 (bukan teks). Tanpa ini
+  // seluruh kolom hari jadi kosong walau datanya ada. cellText() sengaja TIDAK
+  // mengubah angka 1-7 jadi nama hari (bisa merusak SKS), jadi konversinya di sini.
+  // Nilainya bisa datang sebagai number ATAU string "1" (lewat cellText), jadi
+  // diperiksa SEBELUM huruf dibersihkan di bawah.
+  const raw=String(v??'').trim();
+  if(/^[1-7]$/.test(raw))return HARI[+raw-1];
+  const s=raw.toLowerCase().replace(/[^a-z]/g,'');
   const m={senin:'Senin',selasa:'Selasa',slasa:'Selasa',rabu:'Rabu',kamis:'Kamis',jumat:'Jumat',sabtu:'Sabtu',saptu:'Sabtu',minggu:'Minggu',ahad:'Minggu'};
   const short={sen:'Senin',sel:'Selasa',rab:'Rabu',kam:'Kamis',jum:'Jumat',sab:'Sabtu',min:'Minggu'};
   if(m[s])return m[s];
@@ -1277,6 +1316,21 @@ function normTipe(v,def){
   if(s==='t'||s==='th')return 'Teori';
   return def||'Teori';
 }
+// Deteksi tipe saat KOLOM TIPE TIDAK ADA / KOSONG, berurutan: nama matkul lalu kode.
+// - Nama matkul: cari kata utuh "praktikum"/"praktik"/"lab" (bukan substring, agar
+//   "Kolaborasi" tidak dianggap lab).
+// - Kode: huruf P di AKHIR kode praktikum di hampir semua kampus (IF301 vs IF301P).
+// Mengembalikan '' bila tidak yakin → pemanggil memakai default.
+function inferTipe(matkul,kode){
+  const t=String(matkul||'').toLowerCase();
+  if(/\b(praktikum|praktik|prakt|practicum|practice|lab|laboratorium)\b/.test(t))return 'Praktikum';
+  if(/\b(teori|theory|lecture|kuliah)\b/.test(t))return 'Teori';
+  // kode: IF301P / IF301-P / IF301.P => praktikum. Hanya bila alfanumerik tegas.
+  const k=String(kode||'').toUpperCase().replace(/\s+/g,'');
+  if(/^[A-Z]{0,4}\d{2,5}\s*[-._]?\s*P$/.test(k))return 'Praktikum';
+  if(/^[A-Z]{0,4}\d{2,5}\s*[-._]?\s*T$/.test(k))return 'Teori';
+  return '';
+}
 function normTime(v){
   let s=String(v??'').trim().toUpperCase().replace(/\./g,':').replace(/\s+/g,'');
   if(!s)return '';
@@ -1292,6 +1346,15 @@ function splitTimes(v){
   const m=s.match(/(\d{1,2}:\d{1,2}(?::\d{1,2})?)\s*[-–—]\s*(\d{1,2}:\d{1,2}(?::\d{1,2})?)/);
   if(m)return[normTime(m[1]),normTime(m[2])];
   const t=normTime(s);return[t,''];
+}
+// Jam yang JELAS jam (bukan sekadar angka). Dipakai untuk menggabungkan kolom jam
+// terpisah: "3" pada kolom SKS juga lolos normTime() sebagai "03:00", jadi di sini
+// wajib ada titik dua ("08:00"/"08.00") atau 4 digit HHMM ("0800").
+function clockTime(v){
+  const s=String(v??'').trim();
+  if(!/\d/.test(s))return '';
+  if(/^\d{1,2}[:.]\d{1,2}([:.]\d{1,2})?$/.test(s)||/^\d{4}$/.test(s))return normTime(s);
+  return '';
 }
 function cellText(v){
   if(v==null||v==='')return '';
@@ -1326,20 +1389,30 @@ function aliasIdx(head,names){
   return bestScore>=100?best:-1;
 }
 function detectHeader(rows){
-  const keys=['matkul','mapel','mata kuliah','kode','sks','hari','jam','mulai','selesai','sampai','kelas','ruang','room','dosen','prodi','jurusan'];
-  let best=0,bestHits=-1;
+  const keys=['matkul','mapel','mata kuliah','kode','sks','hari','jam','mulai','selesai','sampai','kelas','ruang','room','dosen','prodi','jurusan','tipe','jenis','waktu','pukul'];
+  let best=-1,bestHits=-1;
   for(let i=0;i<Math.min(rows.length,10);i++){
     const row=(rows[i]||[]).map(x=>normHead(x));
     const hits=keys.filter(k=>row.some(c=>c===k||c.startsWith(k+' ')||c.startsWith(k+'/')||c.endsWith(' '+k)||c.includes(' '+k+' '))).length;
     if(hits>bestHits){bestHits=hits;best=i}
   }
-  // require at least 3 distinct known headers AND more hits than any other row
-  if(bestHits<3)return 0;
-  // also reject pure-title rows: a real header row has multiple short header cells,
-  // a title row usually has one long cell with the rest empty
+  // Nothing header-looking at all → return -1 so the caller knows "headerless"
+  // and starts reading from row 0. Returning 0 here was ambiguous: it meant both
+  // "header is row 0" and "no header", so headerless files silently lost row 0
+  // (e.g. a 3-row paste imported only 2 rows).
+  if(bestHits<3)return -1;
+  // Reject pure-title rows: a real header row has multiple short header cells,
+  // a title row usually has one long cell with the rest empty.
   const hdr=(rows[best]||[]).map(x=>normHead(x)).filter(x=>x!=='');
-  if(hdr.length<3)return 0;
+  if(hdr.length<3)return -1;
   return best;
+}
+// Headerless files: the widest row is usually a data row. Find its first cell so
+// the "!matkul" fallback below picks a real class name, not an empty first column.
+function firstDataRow(rows,from,to){
+  let bi=-1,bl=-1;
+  for(let i=from;i<to;i++){const L=(rows[i]||[]).filter(c=>cellText(c)!=='').length;if(L>bl){bl=L;bi=i}}
+  return bi;
 }
 function parseCSVText(t){
   t=String(t||'').replace(/^\uFEFF/,'');
@@ -1390,20 +1463,21 @@ const COLS={
 function importRows(rows,tipeDefault,target){
   if(!Array.isArray(target))target=data;
   const hi=detectHeader(rows);
-  const head=(rows[hi]||[]).map(x=>String(x??'').toLowerCase().trim());
+  const head=((hi>=0?rows[hi]:rows[0])||[]).map(x=>String(x??'').toLowerCase().trim());
   const ix={};for(const k in COLS)ix[k]=aliasIdx(head,COLS[k]);
   if(ix.matkul<0){
-    let bi=hi+1,bl=-1;
-    for(let i=hi+1;i<rows.length;i++){const L=(rows[i]||[]).length;if(L>bl){bl=L;bi=i}}
     ix.matkul=0;
-    if(!rows[bi])return{n:0,lewat:0,headerRow:hi};
+    const bi=firstDataRow(rows,0,rows.length);
+    if(bi<0||!rows[bi])return{n:0,lewat:0,headerRow:hi};
   }
   let n=0,lewat=0;const usedCols=new Set(Object.values(ix).filter(v=>v>=0));
   // Detect if there's a dedicated hari column
   const hasHariCol = ix.hari >= 0;
   // For merged-cell / row-per-day layouts: carry last day value downward
   let lastHari='';
-  for(let i=hi+1;i<rows.length;i++){
+  // Header at row 0 is unambiguous; -1 means headerless → read every row.
+  const startIdx = hi >= 0 ? hi+1 : 0;
+  for(let i=startIdx;i<rows.length;i++){
     const r=rows[i]||[];
     if(!r.some(c=>cellText(c)!==''))continue;
     const g=k=>ix[k]<0?'':cellText(r[ix[k]]);
@@ -1416,34 +1490,42 @@ function importRows(rows,tipeDefault,target){
     // If this row is ONLY a day name (row-per-day header), remember it and skip as data.
     // hariCell comes from the hari column when it exists; if there's no hari column,
     // also scan the matkul cell / row blob for a standalone day name.
-    const dayFromRow = hariCell || (!hasHariCol ? (normDay(matkul) || '') : '');
+    const dayFromRow = hariCell || (!hasHariCol ? (normDay(matkul) || dayInCell(matkul) || '') : '');
     const onlyDay = dayFromRow && !matkul && r.filter(c=>cellText(c)!=='').every(c=>normDay(cellText(c)) || !cellText(c));
     if (onlyDay) { lastHari=dayFromRow; continue; }
     // also catch: no hari column but the row's matkul cell IS just a day name
     if (!hasHariCol && !hariCell && matkul) {
-      const mDay = normDay(matkul);
+      const mDay = normDay(matkul) || dayInCell(matkul);
       if (mDay && r.filter(c=>cellText(c)!=='').every(c=>normDay(cellText(c)) || !cellText(c))) {
         lastHari=mDay; continue;
       }
     }
     // carry last day down when the hari cell is blank/merged
     if (hasHariCol && !hariCell && hariRaw === '') hari = lastHari || '';
+    // Kolom hari kosong / tidak ada kolom hari: cari nama hari yang tertanam di
+    // sel mana pun (mis. "Senin, 08:00-10:30" atau "Senin/08:00").
+    if (!hari) {
+      for (const c of r) { const d = dayInCell(cellText(c)); if (d) { hari = d; break; } }
+    }
     // --- end HARI ---
     const mulaiCell=g('mulai'),selesaiCell=g('selesai');
-    let tm=splitTimes(mulaiCell);let tm1=tm[0],tm2=tm[1];
-    // splitTimes returns [start,end] from a RANGE like "08:00-10:30".
-    // But when mulai/selesai are SEPARATE single-time columns, we get ["08:00",""].
-    // So also try the selesai cell as a single end time.
-    if(!tm1||!tm2){
-      const s2=splitTimes(selesaiCell);
-      // s2[0] could be a single end time ("10:30") OR the start of a range in selesai
-      if(s2[0]&&!tm1)tm1=s2[0];
-      if(s2[1]&&!tm2)tm2=s2[1];      // range end
-      else if(s2[0]&&!tm2&&tm1)tm2=s2[0]; // separate-column end time
-      else if(s2[0]&&!tm1&&!tm2){tm1=s2[0];} // only selesai has a time
+    let tm1=clockTime(mulaiCell),tm2=clockTime(selesaiCell);
+    // 1) Kolom "mulai"/"selesai" berisi RENTANG, mis. "08:00-10:30".
+    if(!(tm1&&tm2)){const rng=splitTimes(mulaiCell);if(rng[0]&&rng[1]){tm1=rng[0];tm2=rng[1]}}
+    if(!(tm1&&tm2)){const rng=splitTimes(selesaiCell);if(rng[0]&&rng[1]){tm1=rng[0];tm2=rng[1]}}
+    // 2) Seluruh baris berisi satu rentang, mis. kolom "Jadwal" = "Senin, 08:00-10:30".
+    if(!(tm1&&tm2)){for(const c of r){const t=splitTimes(cellText(c));if(t[0]&&t[1]){tm1=t[0];tm2=t[1];break}}}
+    // 3) Kolom jam TERPISAH tanpa header jam (mis. "08:00" lalu "10:30" di kolom
+    //    berurutan). Ambil dua jam sah pertama/kedua — clockTime() menolak "3" (SKS).
+    if(!(tm1&&tm2)){
+      const clocks=[];
+      for(let c=0;c<r.length;c++){const t=clockTime(cellText(r[c]));if(t)clocks.push({c,t})}
+      if(clocks.length>=2){tm1=tm1||clocks[0].t;tm2=tm2||clocks[1].t;
+        usedCols.add(clocks[0].c);usedCols.add(clocks[1].c);}
+      else if(clocks.length===1&&!tm1)tm1=clocks[0].t;
     }
-    if(!tm1&&!tm2){for(let c=0;c<r.length;c++){if(usedCols.has(c))continue;const t=splitTimes(cellText(r[c]));if(t[0]&&t[1]){tm1=t[0];tm2=t[1];break}}}
-    if(!tm1&&!tm2){const any=rowBlob.match(/(\d{1,2}[:.]\d{1,2})\s*[-–—]\s*(\d{1,2}[:.]\d{1,2})/);if(any){tm1=normTime(any[1]);tm2=normTime(any[2])}}
+    // 3b) Jaring terakhir: rentang apa pun di dalam teks baris.
+    if(!(tm1&&tm2)){const any=rowBlob.match(/(\d{1,2}[:.]\d{1,2})\s*[-–—]\s*(\d{1,2}[:.]\d{1,2})/);if(any){tm1=tm1||normTime(any[1]);tm2=tm2||normTime(any[2])}}
     if(!matkul){
       const dtOnly=/^\s*(\d{1,2}[:.]\d{1,2})(\s*[-–—]\s*(\d{1,2}[:.]\d{1,2}))?\s*$/.test(rowBlob.replace(/\|/g,' ').trim())||/^\s*(senin|selasa|rabu|kamis|jumat|sabtu|minggu)\s*$/i.test(rowBlob.replace(/\|/g,' ').trim());
       if(dtOnly)continue;
@@ -1466,8 +1548,13 @@ function importRows(rows,tipeDefault,target){
     if(!isNaN(tm1m)&&!isNaN(tm2m)&&tm2m<tm1m){const t=tm1;tm1=tm2;tm2=t}
     // BUG-3.4: a data row must have at least one valid time — otherwise it's not a class
     if(isNaN(tm1m)&&isNaN(tm2m)){lewat++;continue}
-    let sks=parseInt(String(g('sks')).replace(',','.'),10);if(isNaN(sks))sks=tipeDefault==='Praktikum'?1:2;
-    target.push({id:uid(),matkul,kode:g('kode'),sks,hari,tipe:normTipe(g('tipe'),tipeDefault),mulai:tm1,selesai:tm2,kelas:g('kelas'),ruang:g('ruang'),dosen:g('dosen'),prodi:g('prodi')});
+    // Tipe: kolom tipe menang; kalau kosong tebak dari nama matkul lalu kode;
+    // kalau masih ragu pakai default (yang kini hanya "teori").
+    const tipeCell=g('tipe');
+    const tipe=(tipeCell?normTipe(tipeCell,''):'')||inferTipe(matkul,g('kode'))||normTipe('',tipeDefault);
+    let sks=parseInt(String(g('sks')).replace(',','.'),10);
+    if(isNaN(sks))sks=tipe==='Praktikum'?1:2;   // praktikum biasanya 1 SKS
+    target.push({id:uid(),matkul,kode:g('kode'),sks,hari,tipe,mulai:tm1,selesai:tm2,kelas:g('kelas'),ruang:g('ruang'),dosen:g('dosen'),prodi:g('prodi')});
     n++;
   }
   return{n,lewat,headerRow:hi};
@@ -1486,28 +1573,38 @@ function importExcel(fileId,previewId,dropId,tipeDefault,tipeLabel,intoMaster){
   rd.onerror=()=>{reset();toast('Gagal membaca file')};
   rd.onload=e=>{
     try{
-      let rows=null;
+      let rowsList=null; // daftar sheet/lembar; satu file bisa punya >1 sheet
       const isCSV=/\.csv$/i.test(f.name)||String(f.type||'').includes('csv');
       if(isCSV){
         const buf=new Uint8Array(e.target.result);let text='';
         try{text=new TextDecoder('utf-8').decode(buf)}catch(_){text=Array.from(buf).map(b=>String.fromCharCode(b)).join('')}
-        rows=parseCSVText(text);
+        rowsList=[parseCSVText(text)];
       }else{
         const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
         if(!wb.SheetNames.length)throw new Error('tidak ada sheet di file');
-        const ws=wb.Sheets[wb.SheetNames[0]];
-        if(!ws||!ws['!ref'])throw new Error('sheet pertama kosong');
-        rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true,blankrows:false});
+        rowsList=[];
+        for(const nm of wb.SheetNames){
+          const ws=wb.Sheets[nm];
+          if(!ws||!ws['!ref'])continue;
+          const rr=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true,blankrows:false});
+          if(rr&&rr.length)rowsList.push(rr);
+        }
       }
+      const rows=rowsList&&rowsList[0];
       if(!rows||!rows.length)throw new Error('file kosong / tidak terbaca');
       if(intoMaster){
         master=[];
-        const r=importRows(rows,tipeDefault,master);
+        let n=0,lewat=0;
+        for(const rs of rowsList){const r=importRows(rs,tipeDefault,master);n+=r.n;lewat+=r.lewat}
+        const r={n,lewat};
         reset();saveMaster();
         $(previewId).textContent='✓ '+r.n+' baris master tersimpan.'+(r.lewat?' ('+r.lewat+' dilewati)':'');
         toast(r.n?r.n+' baris master tersimpan ✓':'Tidak ada baris valid');
         if(kodePicks.length)regenFromMaster();
-      }else{        const r=importRows(rows,tipeDefault,data);
+      }else{
+        let n=0,lewat=0,hi=0;
+        for(const rs of rowsList){const r=importRows(rs,tipeDefault,data);n+=r.n;lewat+=r.lewat;if(r.headerRow>0)hi=r.headerRow}
+        const r={n,lewat,headerRow:hi};
         reset();save();render();
         $(previewId).textContent='✓ '+r.n+' baris '+tipeLabel+' ditambahkan.'+(r.lewat?' ('+r.lewat+' tanpa nama dilewati)':'')+(r.headerRow>0?' (header baris '+(r.headerRow+1)+')':'');
         toast(r.n?r.n+' jadwal '+tipeLabel+' ditambahkan ✓':'Tidak ada baris valid — cek format kolom');
@@ -1531,6 +1628,7 @@ async function readFileRows(file){
   const isCSV=/\.csv$/i.test(file.name)||String(file.type||'').includes('csv');
   const isPDF=/\.pdf$/i.test(file.name)||String(file.type||'').includes('pdf');
   const buf=await file.arrayBuffer();
+  const key=hashBytes(new Uint8Array(buf)); // key anti-duplikat = hash ISI file
   if(isPDF){
     // PDF.js v6 = ESM-only (.mjs). Dynamic import supaya 520KB lib cuma dimuat
     // saat ada PDF, bukan tiap load halaman. Worker di-set ke URL jsdelivr sama.
@@ -1565,37 +1663,52 @@ async function readFileRows(file){
       }
     }
     if(!lines.length) throw new Error('PDF tidak berisi teks terpilih (kemungkinan scan gambar) — coba file Excel/CSV atau PDF hasil export');
-    return { rows: parseCSVText(lines.join('\n')) };
+    return { rows: parseCSVText(lines.join('\n')), key };
   }
   if(isCSV){
     let text; try{ text=new TextDecoder('utf-8').decode(new Uint8Array(buf)); }catch(_){ text=Array.from(new Uint8Array(buf)).map(b=>String.fromCharCode(b)).join(''); }
-    return { rows: parseCSVText(text) };
+    return { rows: parseCSVText(text), key };
   }
   if(typeof XLSX==='undefined') throw new Error('Pustaka Excel belum termuat — cek internet lalu refresh');
   const wb=XLSX.read(buf,{type:'array',cellDates:true});
   if(!wb.SheetNames.length) throw new Error('tidak ada sheet di file');
-  const ws=wb.Sheets[wb.SheetNames[0]];
-  if(!ws||!ws['!ref']) throw new Error('sheet pertama kosong');
-  return { rows: XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true,blankrows:false}) };
+  // Baca SEMUA sheet: sebagian file Labkom menaruh Teori di sheet 1 dan Praktikum
+  // di sheet 2 — dulu hanya sheet pertama dibaca sehingga praktikum hilang.
+  const sheets=[];
+  for(const nm of wb.SheetNames){
+    const ws=wb.Sheets[nm];
+    if(!ws||!ws['!ref'])continue;
+    const rr=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true,blankrows:false});
+    if(rr&&rr.length)sheets.push(rr);
+  }
+  if(!sheets.length) throw new Error('sheet kosong / tidak terbaca');
+  return { sheets, rows: sheets[0], key };
 }
 
 async function importJadwalMulti(){
   const fl=$('fileJadwal').files;
   if(!fl||!fl.length) return toast('Pilih file jadwal dulu (teori/praktikum/PDF)');
   if(fl.length>4) return toast('Maksimal 4 file sekaligus — hapus yang kelebihan');
-  const tipeDefault=$('tipeDefaultSel').value;
+  // Tipe selalu dipindai otomatis (tidak ada pilihan default di UI). 'Teori'
+  // hanya jaring terakhir bila kolom/nama/kode semuanya tidak menyebut tipe.
+  const tipeDefault='Teori';
   let total=0,skipFiles=[],errFiles=[],parts=[];
   $('previewJadwal').textContent='⏳ Memproses '+fl.length+' file ...';
   for(const f of fl){
-    const k=fileKey(f);
-    if(processedFiles.has(k)){ skipFiles.push(f.name); continue; }
     try{
-      const { rows }=await readFileRows(f);
+      const { rows, sheets, key }=await readFileRows(f);
+      if(processedFiles.has(key)){ skipFiles.push(f.name); continue; }
       if(!rows||!rows.length){ errFiles.push(f.name+' (kosong/tak terbaca)'); continue; }
-      const r=importRows(rows,tipeDefault,data); // data=append; tipe auto per baris via normTipe
-      total+=r.n;
-      parts.push(`${f.name}: ${r.n} baris`+(r.lewat?` (${r.lewat} dilewati)`:'')+(r.headerRow>0?` (header baris ${r.headerRow+1})`:''));
-      processedFiles.add(k); // catat SETELAH sukses → anti-duplikat
+      const lists=(sheets&&sheets.length)?sheets:[rows];
+      let fn=0,fl2=0;
+      for(const rs of lists){
+        const r=importRows(rs,tipeDefault,data); // data=append; tipe auto per baris
+        fn+=r.n;fl2+=r.lewat;
+      }
+      if(!fn){ errFiles.push(f.name+' (0 baris valid)'); continue; }
+      total+=fn;
+      parts.push(`${f.name}: ${fn} baris`+(fl2?` (${fl2} dilewati)`:'')+(lists.length>1?` dari ${lists.length} sheet`:''));
+      processedFiles.add(key); // catat SETELAH sukses → anti-duplikat (hash isi)
     }catch(e){ errFiles.push(f.name+': '+e.message); }
   }
   saveProcessed();
