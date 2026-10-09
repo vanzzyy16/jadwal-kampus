@@ -37,6 +37,7 @@ const save = () => {
 /* ---------- MASTER + KODE MK (auto mode) ---------- */
 const MASTER_KEY = 'jadwal-master';
 const PICKS_KEY = 'jadwal-kodepicks';
+const MODE_KEY = 'jadwal-mode';
 let master = [];
 let kodePicks = []; // [{kode, kelas}]  — kelas='' berarti belum dipilih (multi)
 const saveMaster = () => { try { localStorage.setItem(MASTER_KEY, JSON.stringify(master)); } catch (e) {} };
@@ -664,14 +665,36 @@ $('btnEmptyContoh').addEventListener('click', muatContoh);
 /* ============================================================
    AUTO KODE MK — wiring tombol & mode toggle
    ============================================================ */
-/* mode toggle: Manual vs Auto Kode MK */
-document.querySelectorAll('.seg-btn[data-mode]').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('.seg-btn[data-mode]').forEach(x => x.classList.remove('on'));
-  b.classList.add('on');
-  document.body.dataset.mode = b.dataset.mode;
-  if (b.dataset.mode === 'auto') renderKodeResult();
-}));
-document.body.dataset.mode = 'manual';
+/* mode toggle: Manual vs Auto Kode MK — pilihan disimpan supaya reload tidak
+   diam-diam balik ke Manual padahal master + daftar kode masih tersimpan */
+function setMode(mode, { silent = false } = {}) {
+  mode = mode === 'auto' ? 'auto' : 'manual';
+  document.querySelectorAll('.seg-btn[data-mode]').forEach(x => x.classList.toggle('on', x.dataset.mode === mode));
+  document.body.dataset.mode = mode;
+  try { localStorage.setItem(MODE_KEY, mode); } catch (e) {}
+  if (mode === 'auto') {
+    renderKodeResult();
+    // master/picks masih ada tapi jadwal personal belum ter-regen (mis. setelah
+    // reload) → susun ulang, kalau tidak sidebar bilang auto padahal tabel kosong
+    if (master.length && kodePicks.length && !data.length) regenFromMaster();
+    if (!silent && !master.length) toast('Import file master dulu (jadwal lengkap kampus)');
+  }
+}
+document.querySelectorAll('.seg-btn[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+let savedMode = 'manual';
+try { savedMode = localStorage.getItem(MODE_KEY) === 'auto' ? 'auto' : 'manual'; } catch (e) {}
+setMode(savedMode, { silent: true });
+
+/* pulihkan tampilan sidebar auto setelah reload: master & daftar kode tersimpan di
+   localStorage, tapi isi textarea dan nama file tidak — tanpa ini sidebar bilang
+   "Belum ada file" & kolom kode kosong padahal keduanya masih terpakai. */
+(function restoreAutoUI() {
+  if (master.length) {
+    $('fileNameMaster').textContent = master.length + ' baris master tersimpan';
+    $('previewMaster').textContent = '✓ ' + master.length + ' baris master tersimpan.';
+  }
+  if (kodePicks.length) $('kodeInput').value = kodePicks.map(p => p.kode).join('\n');
+})();
 
 /* import master: reuse importExcel dengan intoMaster=true */
 $('btnMaster').addEventListener('click', () => importExcel('fileMaster','previewMaster','dropMaster','Teori','master',true));
