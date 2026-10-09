@@ -1135,121 +1135,106 @@ function openGCalEvent(d, silent) {
 
 $('btnExportPNG').addEventListener('click', () => {
   if (!data.length) return toast('Belum ada data');
-  toast('Membuat gambar... ⏳');
-  const target = $('cardTabel');
   if (typeof html2canvas === 'undefined') return toast('Pustaka gambar belum termuat — cek internet');
+  toast('Membuat gambar jadwal... ⏳');
 
-  // Pastikan konten tabel/kartu tampil untuk capture (di mobile tabel disembunyikan)
-  const tw = target.querySelector('.table-wrap');
-  const cards = target.querySelector('#cards');
-  const prevTableDisp = tw?.style.display;
-  const prevCardsDisp = cards?.style.display;
-  if (window.innerWidth <= 900 && tw) {
-    tw.style.display = 'block';
-    if (cards) cards.style.display = 'none';
-  }
-
-  // Suntikkan legenda ke target ASLI sebelum capture supaya dimensi (scrollHeight)
-  // ikut memuatnya — html2canvas mengukur target asli, bukan clone. Legenda dihapus
-  // lagi di then/catch. Penerima gambar jadi tahu arti warna baris + jumlah kelas.
-  const legend = document.createElement('div');
-  legend.className = 'png-legend';
+  // Bangun POSTER jadwal lengkap (bukan screenshot tabel) — satu elemen
+  // .png-poster berisi: header (judul + meta), grid kalender mingguan,
+  // legenda, footer. Poster di-position absolute off-screen + visible,
+  // ukuran menyesuaikan konten (scrollWidth/Height), lalu di-capture utuh.
+  const list = filtered();
+  const clash = tandaiBentrok(data);
   const _t = data.filter(d => d.tipe === 'Teori').length;
   const _p = data.filter(d => d.tipe === 'Praktikum').length;
-  const _b = (tandaiBentrok(data).ids).size;
+  const _b = clash.ids.size;
   const _dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-  legend.innerHTML =
-    '<span class="leg-title">Jadwal Kampus — ' + esc(data.length + ' kelas') + '</span>' +
-    '<span class="leg-item"><span class="leg-sw teo"></span>Teori (' + _t + ')</span>' +
-    '<span class="leg-item"><span class="leg-sw prak"></span>Praktikum (' + _p + ')</span>' +
-    (_b ? '<span class="leg-item"><span class="leg-sw clash"></span>Bentrok (' + _b + ')</span>' : '') +
-    '<span class="leg-meta">jadwal-kampus.vercel.app • ' + esc(_dateStr) + '</span>';
-  target.appendChild(legend);
-  const restoreLive = () => {
-    legend.remove();
-    if (window.innerWidth <= 900 && tw) {
-      if (prevTableDisp !== undefined) tw.style.display = prevTableDisp;
-      if (cards) cards.style.display = prevCardsDisp;
-    }
+  const sksTotal = data.reduce((s, d) => s + (+d.sks || 0), 0);
+
+  // header per hari: "Senin (3)" — daftar event di kolomnya, urut jam
+  const dayCols = HARI.filter(h => data.some(d => d.hari === h));
+  // gunakan hari yang punya kelas; kalau kosong (semua hari tampil) fallback 7
+  const hariPakai = dayCols.length ? dayCols : HARI;
+
+  const fmtShort = s => fmtTime(s); // "08:00"
+  const evCard = (d, isClash) => {
+    const cls = ['png-ev'];
+    if (d.tipe === 'Praktikum') cls.push('prak');
+    if (isClash) cls.push('bentrok');
+    const jam = fmtShort(d.mulai) + (fmtShort(d.selesai) ? '–' + fmtShort(d.selesai) : '');
+    const meta = [d.kelas, d.ruang].filter(Boolean).join(' • ');
+    return `<div class="${cls.join(' ')}">
+      <div class="png-ev-jam">${esc(jam)}</div>
+      <div class="png-ev-nama">${esc(d.matkul)}</div>
+      ${d.kode ? `<div class="png-ev-kode">${esc(d.kode)}${d.sks ? ' · ' + d.sks + ' SKS' : ''}</div>` : ''}
+      ${meta ? `<div class="png-ev-meta">${esc(meta)}</div>` : ''}
+      ${d.dosen ? `<div class="png-ev-dosen">${esc(d.dosen)}</div>` : ''}
+    </div>`;
   };
 
-  html2canvas(target, {
+  // kolom per hari
+  const colsHtml = hariPakai.map(h => {
+    const evs = list.filter(d => d.hari === h)
+      .sort((a, b) => sortMin(a.mulai) - sortMin(b.mulai));
+    const n = evs.length;
+    const todayCls = h === HARI[(new Date().getDay() + 6) % 7] ? ' today' : '';
+    return `<div class="png-col${todayCls}">
+      <div class="png-col-head"><span class="png-col-hari">${esc(h)}</span><span class="png-col-n">${n}</span></div>
+      <div class="png-col-body">${evs.length
+        ? evs.map(d => evCard(d, clash.ids.has(d.id))).join('')
+        : '<div class="png-col-kosong">—</div>'}
+      </div>
+    </div>`;
+  }).join('');
+
+  const poster = document.createElement('div');
+  poster.className = 'png-poster';
+  poster.innerHTML = `
+    <div class="png-poster-inner">
+      <header class="png-head">
+        <div class="png-head-brand">
+          <span class="png-logo">📅</span>
+          <div>
+            <div class="png-title">Jadwal Kampus</div>
+            <div class="png-sub">Jadwal Kuliah Mingguan</div>
+          </div>
+        </div>
+        <div class="png-head-stats">
+          <div class="png-stat"><b>${data.length}</b><small>Kelas</small></div>
+          <div class="png-stat"><b>${sksTotal}</b><small>SKS</small></div>
+          ${_b ? `<div class="png-stat bentrok"><b>${_b}</b><small>Bentrok</small></div>` : ''}
+        </div>
+      </header>
+      <div class="png-grid" style="--cols:${hariPakai.length}">${colsHtml}</div>
+      <div class="png-legend">
+        <span class="png-leg png-leg-teo"></span><span>Teori (${_t})</span>
+        <span class="png-leg png-leg-prak"></span><span>Praktikum (${_p})</span>
+        ${_b ? `<span class="png-leg png-leg-clash"></span><span>Bentrok (${_b})</span>` : ''}
+        <span class="png-leg-date">${esc(_dateStr)}</span>
+      </div>
+      <footer class="png-foot">jadwal-kampus.vercel.app · data hanya di browser kamu</footer>
+    </div>`;
+  document.body.appendChild(poster);
+
+  const restore = () => poster.remove();
+
+  html2canvas(poster, {
     backgroundColor: '#ffffff',
-    scale: Math.min(3, window.devicePixelRatio * 2 || 2),
+    scale: Math.min(3, (window.devicePixelRatio * 2) || 2),
     useCORS: true,
     logging: false,
-    width: target.scrollWidth,
-    height: target.scrollHeight,
-    windowWidth: target.scrollWidth,
-    windowHeight: target.scrollHeight,
-    // PAKSA TEMA TERANG saat capture supaya di dark mode gambar tidak jadi hitam.
-    // onclone memberi salinan DOM terpisah; kita ubah salinan itu, bukan layar asli.
-    onclone: (doc) => {
-      const root = doc.documentElement;
-      root.setAttribute('data-theme', 'light');
-      // override CSS variables di root clone agar pasti terang
-      const style = doc.createElement('style');
-      style.textContent = `
-        [data-theme="light"]{
-          --bg:#eef1ff;--bg2:#f8f9ff;--bg3:#eef2ff;--card:#ffffff;
-          --ink:#131536;--ink2:#3a3d63;--mut:#6b7194;--line:#e5e8fb;
-          --acc:#4f46e5;--acc2:#7c3aed;--ok:#059669;--dan:#dc2626;
-          --info:#0ea5e9;--ok-bg:#ecfdf5;--dan-bg:#fef2f2;--info-bg:#f0f9ff;
-        }
-        *{ background-color:transparent !important; }
-        /* hilangkan shadow BLUR (problematis html2canvas) tapi pertahankan
-           shadow offset brutal (5px 5px 0 — simple, dirender dgn baik) */
-        *{ box-shadow:none !important; }
-        .card,.toolbar,.stat,.import-card,.btn-primary,.btn-ghost,.icon-btn,.chip,.drop,.logo,.daycol,.alert,.modal-panel,.seg,.fab,.jcard,.pill,.badge,.hero-badges span,#tabs button,.bottomnav button{ box-shadow:5px 5px 0 #11132b !important; }
-        .card:hover,.stat:hover,.btn-primary:hover,.btn-ghost:hover,.icon-btn:hover,.drop:hover,.chip:hover,#tabs button.on{ box-shadow:7px 7px 0 #11132b !important; }
-        .modal-panel{ box-shadow:7px 7px 0 #11132b !important; }
-        .card{ background-color:#ffffff !important; }
-        .table-wrap,#cards,.jcard,.stat,.toolbar,#cardTabel{ background-color:#ffffff !important; }
-        tbody tr:hover{ background:#f8f9ff !important; }
-        .ev{ background:linear-gradient(135deg,#131536,#2b2e6b) !important; color:#fff !important; }
-        .ev.prak{ background:linear-gradient(135deg,#4f46e5,#7c3aed) !important; }
-        .ev.bentrok{ background:linear-gradient(135deg,#dc2626,#991b1b) !important; }
-        .badge.Teori{ background:#f0f9ff !important; color:#0369a1 !important; }
-        .badge.Praktikum{ background:#f5f3ff !important; color:#6d28d9 !important; }
-        tr.bentrok{ background:#fef2f2 !important; }
-        .jcard.bentrok{ background:#fef2f2 !important; }
-        .pill{ background:linear-gradient(135deg,#4f46e5,#7c3aed) !important; color:#fff !important; }
-        .card-head,#tbody,#calendar{ background:#ffffff !important; }
-        thead{ background:#eef2ff !important; }
-        .muted{ color:#6b7194 !important; }
-        /* html2canvas can't render background-clip:text (gradient headings) —
-           it would export as invisible text; force a solid ink color instead. */
-        .card-head h3{ background:none !important; -webkit-text-fill-color:#131536 !important; -webkit-background-clip:border-box !important; background-clip:border-box !important; color:#131536 !important; }
-        /* BUG-4.3/4.4: pastikan card & tabel tidak disembunyikan/dipotong saat capture */
-        #cardTabel,#cardKalender{ display:block !important; visibility:visible !important; }
-        .table-wrap{ display:block !important; max-height:none !important; overflow:visible !important; }
-        .cal-list{ display:flex !important; max-height:none !important; overflow:visible !important; }
-        .cal-list.hidden{ display:flex !important; }
-        /* Resolve: tabel terpotong di PNG karena white-space:nowrap di th,td
-           memaksa lebar 886px > wrap 790px -> kolom Dosen/Kelas/Ruang/Tipe
-           hilang. Saat capture: izinkan wrap pada sel teks & paksa tabel lebar
-           penuh sehingga semua kolom muat tanpa scroller. */
-        table{ width:100% !important; table-layout:auto !important; }
-        th,td{ white-space:normal !important; word-break:break-word !important; }
-        td[colspan],.empty td{ white-space:normal !important; }
-        /* html2canvas menangkap frame saat animasi masih berjalan (opacity:0
-           pada awal rowIn/fadeUp) -> baris terlihat kosong/putih. Matikan semua
-           animasi & paksa opacity penuh + transform nol di clone capture. */
-        *,*::before,*::after{ animation:none !important; animation-delay:0s !important; transition:none !important; }
-        tbody tr,.jcard,.card,.stat span,.daycol.today,.empty-ico,.ev.bentrok,.jcard.bentrok{ opacity:1 !important; transform:none !important; }
-        .toast{ opacity:0 !important; }
-      `;
-      root.appendChild(style);
-    }
+    width: poster.scrollWidth,
+    height: poster.scrollHeight,
+    windowWidth: poster.scrollWidth,
+    windowHeight: poster.scrollHeight,
   }).then(c => {
-    restoreLive();
+    restore();
     const a = document.createElement('a');
     a.href = c.toDataURL('image/png');
     a.download = 'jadwal-kampus.png'; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    toast('PNG diunduh 🖼️');
+    toast('Gambar jadwal diunduh 🖼️');
   }).catch(() => {
-    restoreLive();
+    restore();
     toast('Gagal ekspor PNG — coba PDF / Cetak');
   });
 });

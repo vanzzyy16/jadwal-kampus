@@ -289,17 +289,52 @@ body[data-mode="auto"] .side .import-card,body[data-mode="auto"] .side .form-car
 .merge-msg.ok{color:var(--ok)}
 .merge-msg.err{color:var(--dan)}
 
-/* ===================== PNG EXPORT LEGEND ===================== */
-/* div ini hanya disuntik ke clone html2canvas, tidak ada di halaman asli.
-   Menampilkan legenda warna supaya penerima gambar tahu arti warna baris. */
-.png-legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:10px 14px;margin:0;border-top:2px solid #11132b;background:#eef2ff;font-size:12px;font-weight:700;color:#131536;font-family:inherit}
-.png-legend .leg-item{display:flex;align-items:center;gap:6px}
-.png-legend .leg-sw{width:14px;height:14px;border:1.5px solid #11132b;border-radius:4px;box-shadow:1px 1px 0 #11132b}
-.png-legend .leg-sw.teo{background:#f0f9ff;border-color:#0369a1}
-.png-legend .leg-sw.prak{background:#f5f3ff;border-color:#6d28d9}
-.png-legend .leg-sw.clash{background:#fef2f2;border-color:#dc2626}
-.png-legend .leg-title{margin-right:auto;font-size:13px}
-.png-legend .leg-meta{color:#6b7194;font-weight:600;font-size:11px}
+/* ===================== PNG EXPORT POSTER =====================
+   Elemen .png-poster disuntik ke DOM saat export PNG, diposisikan off-screen
+   (absolute, left:-99999px) tapi tetap visible/rendered. Berisi poster jadwal
+   lengkap (header + grid mingguan + legenda + footer) yang di-capture utuh
+   oleh html2canvas — bukan screenshot tabel yang terpotong. Tidak ada di
+   halaman asli kecuali saat export berlangsung. Warna HARDCODE (bukan var)
+   supaya selalu tema terang terlepas dari dark/light mode user. */
+.png-poster{position:absolute;left:-99999px;top:0;width:max-content;max-width:1180px;background:#ffffff;color:#131536;font-family:inherit}
+.png-poster-inner{display:flex;flex-direction:column;gap:18px;padding:30px 32px 26px}
+.png-head{display:flex;justify-content:space-between;align-items:center;gap:20px;border-bottom:3px solid #11132b;padding-bottom:16px}
+.png-head-brand{display:flex;align-items:center;gap:14px}
+.png-logo{font-size:34px;line-height:1}
+.png-title{font-family:'Space Grotesk',inherit;font-size:28px;font-weight:700;color:#131536;letter-spacing:-.01em}
+.png-sub{font-size:13px;color:#6b7194;font-weight:500;margin-top:2px}
+.png-head-stats{display:flex;gap:10px}
+.png-stat{display:flex;flex-direction:column;align-items:center;gap:1px;background:#eef2ff;border:1.5px solid #11132b;border-radius:12px;box-shadow:3px 3px 0 #11132b;padding:6px 14px;min-width:56px}
+.png-stat b{font-family:'Space Grotesk',inherit;font-size:20px;font-weight:700;color:#131536}
+.png-stat small{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#6b7194}
+.png-stat.bentrok{background:#fef2f2}
+.png-stat.bentrok b{color:#dc2626}
+.png-grid{display:grid;grid-template-columns:repeat(var(--cols,7),minmax(0,1fr));gap:12px;align-items:start}
+.png-col{background:#f8f9ff;border:1.5px solid #11132b;border-radius:14px;box-shadow:4px 4px 0 #11132b;padding:0;overflow:hidden;display:flex;flex-direction:column}
+.png-col.today{background:#eef2ff;border-color:#4f46e5}
+.png-col-head{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#eef2ff;border-bottom:2px solid #11132b}
+.png-col.today .png-col-head{background:#4f46e5}
+.png-col-hari{font-family:'Space Grotesk',inherit;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#131536}
+.png-col.today .png-col-hari{color:#fff}
+.png-col-n{font-family:'Space Grotesk',inherit;font-size:11px;font-weight:700;background:#fff;border:1.5px solid #11132b;border-radius:6px;padding:1px 7px;color:#131536;min-width:16px;text-align:center}
+.png-col.today .png-col-n{background:#fff;color:#4f46e5}
+.png-col-body{display:flex;flex-direction:column;gap:8px;padding:10px}
+.png-col-kosong{text-align:center;color:#aab0d0;font-size:16px;padding:18px 0}
+.png-ev{background:linear-gradient(135deg,#131536,#2b2e6b);color:#fff;border-radius:9px;padding:7px 9px;border:1px solid rgba(255,255,255,.08)}
+.png-ev.prak{background:linear-gradient(135deg,#4f46e5,#7c3aed)}
+.png-ev.bentrok{background:linear-gradient(135deg,#dc2626,#991b1b)!important;outline:2px solid #fff}
+.png-ev-jam{font-family:'Space Grotesk',inherit;font-size:11.5px;font-weight:700;opacity:.92;letter-spacing:.01em}
+.png-ev-nama{font-size:12.5px;font-weight:700;line-height:1.25;margin-top:2px;overflow-wrap:anywhere}
+.png-ev-kode{font-size:10px;font-weight:600;opacity:.78;margin-top:2px}
+.png-ev-meta{font-size:10.5px;opacity:.82;margin-top:2px}
+.png-ev-dosen{font-size:10px;opacity:.66;margin-top:1px;font-style:italic}
+.png-legend{display:flex;flex-wrap:wrap;gap:16px;align-items:center;padding:12px 16px;background:#eef2ff;border:1.5px solid #11132b;border-radius:12px;box-shadow:3px 3px 0 #11132b;font-size:12px;font-weight:700;color:#131536}
+.png-leg{display:inline-block;width:14px;height:14px;border:1.5px solid #11132b;border-radius:4px}
+.png-leg-teo{background:linear-gradient(135deg,#131536,#2b2e6b)}
+.png-leg-prak{background:linear-gradient(135deg,#4f46e5,#7c3aed)}
+.png-leg-clash{background:linear-gradient(135deg,#dc2626,#991b1b)}
+.png-leg-date{margin-left:auto;color:#6b7194;font-weight:600;font-size:11px}
+.png-foot{text-align:center;font-size:11px;color:#6b7194;font-weight:600;padding-top:4px}
 
 /* ===================== CALENDAR ===================== */
 .calendar{display:grid;grid-template-columns:repeat(7,minmax(140px,1fr));gap:8px;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:thin;padding-bottom:6px}
