@@ -36,6 +36,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
+<!-- ============ PWA / OFFLINE STATUS ============ -->
+<div id="pwaBar" class="pwabar hidden" role="status" aria-live="polite">
+  <span id="pwaMsg"></span>
+  <button id="pwaAction" class="pwabar-btn hidden" type="button"></button>
+  <button id="pwaClose" class="pwabar-x" type="button" aria-label="Tutup">✕</button>
+</div>
+
 <!-- ============ TOPBAR ============ -->
 <header class="topbar">
   <div class="wrap topbar-in">
@@ -51,6 +58,7 @@
       <div class="menu-wrap">
         <button id="btnShare" class="btn-primary sm" title="Bagikan / Ekspor">⬆ Bagikan ▾</button>
         <div id="shareMenu" class="menu" role="menu" hidden>
+          <button id="btnShareLink" role="menuitem">🔗 Bagikan Jadwal (link)</button>
           <button id="btnExportICS" role="menuitem">📆 Kalender (ICS)</button>
           <button id="btnExportPNG" role="menuitem">🖼️ Gambar (PNG)</button>
           <button id="btnPrint" role="menuitem">🖨️ PDF / Cetak</button>
@@ -300,6 +308,30 @@
       <button type="button" class="btn-ghost" data-close>Batal</button>
       <button type="button" id="confirmOk" class="btn-primary danger">Ya, lanjutkan</button>
     </div>
+  </div>
+</div>
+
+<!-- ============ MERGE / SHARE MODAL ============ -->
+<div id="modalMerge" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="mergeTitle">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel">
+    <div class="modal-head"><h3 id="mergeTitle">🔗 Bagikan / Gabung Jadwal</h3><button class="icon-btn sm" data-close aria-label="Tutup">✕</button></div>
+    <p class="muted">Bagikan jadwal kamu lewat link ke teman. Teman membuka link → jadwalnya otomatis dimuat. Klik <b>Gabung</b> untuk menambahkan ke jadwal mereka (cek bentrok bareng kelompok).</p>
+    <div class="merge-section">
+      <label class="muted" for="shareLinkOut">Link jadwal kamu (salin lalu kirim)</label>
+      <div class="share-row">
+        <input id="shareLinkOut" type="text" readonly aria-label="Link jadwal untuk dibagikan" />
+        <button id="btnCopyLink" class="btn-primary" type="button">📋 Salin</button>
+      </div>
+    </div>
+    <div class="merge-section">
+      <label class="muted" for="shareLinkIn">Atau tempel link jadwal teman di sini</label>
+      <div class="share-row">
+        <input id="shareLinkIn" type="text" placeholder="https://jadwal-kampus.vercel.app/?d=..." aria-label="Tempel link jadwal teman" />
+        <button id="btnMergeLink" class="btn-primary" type="button">➕ Gabung</button>
+      </div>
+    </div>
+    <p id="mergeMsg" class="merge-msg" role="status" aria-live="polite"></p>
   </div>
 </div>
 

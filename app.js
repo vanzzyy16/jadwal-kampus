@@ -478,6 +478,117 @@ $('shareMenu').querySelectorAll('button').forEach(b => b.addEventListener('click
 }));
 
 /* ============================================================
+   SHARE / MERGE JADWAL via link
+   - Jadwal personal (data[]) dienkode base64url di ?d= lalu ditempel ke teman.
+   - Teman buka link → data otomatis dimuat (replace). Klik "Gabung" → tambahkan
+     (assign id baru) supaya cek bentrok bareng kelompok.
+   - Master & kodePicks TIDAK ikut — hanya jadwal personal yang relevan untuk
+     cek bentrok kelompok (master bisa ribuan baris, terlalu besar untuk URL).
+   ============================================================ */
+function encodeJadwalLink() {
+  try {
+    const json = JSON.stringify(data);
+    // base64url: btoa gagal untuk non-ASCII (matkul Bahasa Indonesia aman, tapi
+    // jaga-jaga untuk karakter UTF-8). Encode UTF-8 → base64 → url-safe.
+    const bytes = new TextEncoder().encode(json);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    const b64 = btoa(bin);
+    const b64url = b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const base = location.origin + location.pathname;
+    return base + '?d=' + b64url;
+  } catch (e) { return ''; }
+}
+function decodeJadwalLink(raw) {
+  try {
+    if (!raw) return null;
+    let b64 = raw.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const json = new TextDecoder().decode(bytes);
+    const arr = JSON.parse(json);
+    return Array.isArray(arr) ? arr : null;
+  } catch (e) { return null; }
+}
+$('btnShareLink').addEventListener('click', () => {
+  if (!data.length) return toast('Belum ada jadwal untuk dibagikan');
+  const link = encodeJadwalLink();
+  if (!link) return toast('Gagal membuat link');
+  $('shareLinkOut').value = link;
+  $('shareLinkIn').value = '';
+  $('mergeMsg').textContent = '';
+  $('mergeMsg').className = 'merge-msg';
+  openModal('modalMerge');
+  setTimeout(() => $('shareLinkOut').select(), 100);
+});
+$('btnCopyLink').addEventListener('click', async () => {
+  const link = $('shareLinkOut').value;
+  if (!link) return;
+  try {
+    await navigator.clipboard.writeText(link);
+    toast('Link disalin 📋');
+  } catch (e) {
+    $('shareLinkOut').select();
+    // execCommand('copy') is deprecated but still the only clipboard fallback for
+    // non-secure (http) or older browsers; navigator.clipboard is preferred above.
+    document.execCommand('copy');
+    toast('Link disalin 📋');
+  }
+});
+$('btnMergeLink').addEventListener('click', () => {
+  const raw = $('shareLinkIn').value.trim();
+  const msg = $('mergeMsg');
+  msg.textContent = 'Memeriksa link...'; msg.className = 'merge-msg';
+  // Ekstrak payload ?d= dari link yang ditempel (boleh full URL atau hanya payload)
+  let payload = raw;
+  try {
+    const u = new URL(raw);
+    payload = u.searchParams.get('d') || '';
+  } catch (e) {
+    // bukan URL valid — mungkin payload mentah; pakai apa adanya
+    const m = raw.match(/[?&]d=([^&]+)/);
+    if (m) payload = decodeURIComponent(m[1]);
+  }
+  const incoming = decodeJadwalLink(payload);
+  if (!incoming || !incoming.length) {
+    msg.textContent = '✗ Link tidak valid atau jadwal kosong.'; msg.className = 'merge-msg err';
+    return;
+  }
+  // validasi field minimal — tolak struktur aneh
+  const valid = incoming.filter(d => d && d.matkul && d.hari && d.mulai && d.selesai);
+  if (!valid.length) {
+    msg.textContent = '✗ Data dari link rusak (tidak ada baris valid).'; msg.className = 'merge-msg err';
+    return;
+  }
+  // assign id baru supaya tidak tabrakan id yang sudah ada
+  valid.forEach(d => { d.id = uid(); });
+  data.push(...valid);
+  save(); render(); closeModal('modalMerge');
+  const added = valid.length;
+  const clashes = tandaiBentrok(data).groups.length;
+  toast('+' + added + ' kelas digabung' + (clashes ? ' • ' + clashes + ' bentrok baru ⚠️' : ' ✓'));
+});
+/* Auto-load dari ?d= saat buka link share. Replace (bukan merge) — ini halaman
+   fresh. Tunda sedikit supaya render() awal tidak menimpa. */
+(function loadFromShareLink() {
+  try {
+    const u = new URL(location.href);
+    const d = u.searchParams.get('d');
+    if (!d) return;
+    const incoming = decodeJadwalLink(d);
+    if (incoming && incoming.length) {
+      incoming.forEach(x => { if (!x.id) x.id = uid(); });
+      data = incoming; save();
+      setTimeout(() => { render(); toast(incoming.length + ' kelas dimuat dari link 📥'); }, 150);
+      // bersihkan ?d= dari URL supaya refresh tidak terus-terusan mengganti data
+      history.replaceState({}, '', location.pathname);
+    }
+  } catch (e) {}
+})();
+
+/* ============================================================
    FILTERS
    ============================================================ */
 /* debounce render() so fast typing in search/filter doesn't thrash the DOM */
@@ -876,6 +987,30 @@ $('btnExportPNG').addEventListener('click', () => {
     if (cards) cards.style.display = 'none';
   }
 
+  // Suntikkan legenda ke target ASLI sebelum capture supaya dimensi (scrollHeight)
+  // ikut memuatnya — html2canvas mengukur target asli, bukan clone. Legenda dihapus
+  // lagi di then/catch. Penerima gambar jadi tahu arti warna baris + jumlah kelas.
+  const legend = document.createElement('div');
+  legend.className = 'png-legend';
+  const _t = data.filter(d => d.tipe === 'Teori').length;
+  const _p = data.filter(d => d.tipe === 'Praktikum').length;
+  const _b = (tandaiBentrok(data).ids).size;
+  const _dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  legend.innerHTML =
+    '<span class="leg-title">Jadwal Kampus — ' + esc(data.length + ' kelas') + '</span>' +
+    '<span class="leg-item"><span class="leg-sw teo"></span>Teori (' + _t + ')</span>' +
+    '<span class="leg-item"><span class="leg-sw prak"></span>Praktikum (' + _p + ')</span>' +
+    (_b ? '<span class="leg-item"><span class="leg-sw clash"></span>Bentrok (' + _b + ')</span>' : '') +
+    '<span class="leg-meta">jadwal-kampus.vercel.app • ' + esc(_dateStr) + '</span>';
+  target.appendChild(legend);
+  const restoreLive = () => {
+    legend.remove();
+    if (window.innerWidth <= 900 && tw) {
+      if (prevTableDisp !== undefined) tw.style.display = prevTableDisp;
+      if (cards) cards.style.display = prevCardsDisp;
+    }
+  };
+
   html2canvas(target, {
     backgroundColor: '#ffffff',
     scale: Math.min(3, window.devicePixelRatio * 2 || 2),
@@ -945,21 +1080,14 @@ $('btnExportPNG').addEventListener('click', () => {
       root.appendChild(style);
     }
   }).then(c => {
-    // kembalikan tampilan seperti semula
-    if (window.innerWidth <= 900 && tw) {
-      if (prevTableDisp !== undefined) tw.style.display = prevTableDisp;
-      if (cards) cards.style.display = prevCardsDisp;
-    }
+    restoreLive();
     const a = document.createElement('a');
     a.href = c.toDataURL('image/png');
     a.download = 'jadwal-kampus.png'; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast('PNG diunduh 🖼️');
   }).catch(() => {
-    if (window.innerWidth <= 900 && tw) {
-      if (prevTableDisp !== undefined) tw.style.display = prevTableDisp;
-      if (cards) cards.style.display = prevCardsDisp;
-    }
+    restoreLive();
     toast('Gagal ekspor PNG — coba PDF / Cetak');
   });
 });
@@ -1332,10 +1460,104 @@ setInterval(() => {
 }, 60000);
 
 /* ============================================================
-   PWA — register service worker for offline support
+   PWA — service worker + install prompt + offline/online indicator
+   - Daftar SW untuk offline support (shell ter-cache).
+   - Banner atas: "🔒 Offline — perubahan tersimpan lokal" saat koneksi mati,
+     hilang otomatis saat online kembali. Klik ✕ = tutup sesi ini.
+   - Install prompt: tangkap beforeinstallprompt, tampilkan tombol "Install".
+     Chrome hanya munculkan event ini sekali (atau tiap dismiss) — kita hormati
+     & jangan spam: setelah dismiss/install, sembunyikan sesi ini (sessionStorage).
    ============================================================ */
+const pwaBar = $('pwaBar'), pwaMsg = $('pwaMsg'), pwaAction = $('pwaAction');
+function pwaShow(msg, { offline = false, actionLabel = '', actionCb = null } = {}) {
+  pwaMsg.textContent = msg;
+  pwaBar.classList.toggle('offline', offline);
+  pwaBar.classList.remove('hidden');
+  if (actionLabel && actionCb) {
+    pwaAction.textContent = actionLabel;
+    pwaAction.classList.remove('hidden');
+    pwaAction.onclick = actionCb;
+  } else {
+    pwaAction.classList.add('hidden');
+    pwaAction.onclick = null;
+  }
+}
+function pwaHide() { pwaBar.classList.add('hidden'); }
+$('pwaClose').addEventListener('click', () => pwaHide());
+
+// offline/online detection. Periksa navigator.onLine di load lalu dengarkan
+// event online/offline. Beberapa browser menganggap "online" walau jaringan
+// mati (link-local) — tapi untuk PWA statis ini sudah cukup sebagai sinyal.
+function updateOnline() {
+  if (navigator.onLine) {
+    // hanya tutup kalau banner yg sedang tampil adalah banner offline
+    if (pwaBar.classList.contains('offline')) pwaHide();
+  } else {
+    pwaShow('🔒 Offline — semua perubahan tetap tersimpan di browser kamu', { offline: true });
+  }
+}
+window.addEventListener('online', updateOnline);
+window.addEventListener('offline', updateOnline);
+
+// install prompt. Cache event-nya; tampilkan tombol "Install app".
+let deferredPrompt = null;
+const INSTALL_FLAG = 'jk-pwa-install-dismissed';
+window.addEventListener('beforeinstallprompt', (e) => {
+  // hormati: jangan munculkan lagi di sesi yg sama kalau user sudah pernah dismiss
+  if (sessionStorage.getItem(INSTALL_FLAG)) return;
+  e.preventDefault();
+  deferredPrompt = e;
+  pwaShow('📲 Jadwal Kampus bisa dipasang di perangkat kamu — pakai offline seperti app', {
+    actionLabel: 'Install',
+    actionCb: async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      sessionStorage.setItem(INSTALL_FLAG, '1'); // accepted or dismissed → jangan ganggu lagi
+      deferredPrompt = null;
+      pwaHide();
+    }
+  });
+});
+window.addEventListener('appinstalled', () => {
+  sessionStorage.setItem(INSTALL_FLAG, '1');
+  pwaHide();
+  toast('App terpasang ✓ — akses dari home screen');
+});
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      // kalau ada update SW baru menunggu, tampilkan tombol update
+      if (reg.waiting) pwaOfferUpdate(reg);
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if (nw) nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && reg.waiting) pwaOfferUpdate(reg);
+        });
+      });
+    }).catch(() => {});
+    // dengarkan pesan dari SW (skipWaiting done → reload otomatis)
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      // SW baru mengambil alih → reload sekali supaya shell baru dipakai
+      if (!sessionStorage.getItem('jk-sw-reloading')) {
+        sessionStorage.setItem('jk-sw-reloading', '1');
+        location.reload();
+      }
+    });
   });
 }
+function pwaOfferUpdate(reg) {
+  if (sessionStorage.getItem('jk-sw-update-offered')) return;
+  sessionStorage.setItem('jk-sw-update-offered', '1');
+  pwaShow('🔄 Versi baru tersedia — muat ulang untuk pembaruan', {
+    actionLabel: 'Muat ulang',
+    actionCb: () => {
+      if (reg.waiting) reg.waiting.postMessage('skipWaiting');
+      else location.reload();
+    }
+  });
+}
+
+// jalankan cek online sekali di init (setelah elemen pwaBar pasti ada)
+updateOnline();

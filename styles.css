@@ -269,6 +269,38 @@ body[data-mode="auto"] .side .import-card,body[data-mode="auto"] .side .form-car
 [data-theme=dark] .suggest{background:#0b2818;color:#6ee7b7}
 [data-theme=dark] .suggest li small{color:#34d399}
 
+/* ===================== PWA / OFFLINE BAR ===================== */
+.pwabar{position:fixed;top:0;left:0;right:0;z-index:80;display:flex;align-items:center;gap:10px;padding:8px 14px;font-size:13px;font-weight:600;background:var(--acc);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18);animation:slideDown .3s ease}
+.pwabar.hidden{display:none}
+.pwabar #pwaMsg{flex:1}
+.pwabar-btn{background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.5);color:#fff;font-weight:700;font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.pwabar-btn:hover{background:rgba(255,255,255,.3)}
+.pwabar-btn.hidden{display:none}
+.pwabar-x{margin-left:4px;background:none;border:none;color:#fff;font-size:16px;cursor:pointer;opacity:.8;padding:2px 6px;border-radius:6px}
+.pwabar-x:hover{opacity:1;background:rgba(255,255,255,.2)}
+.pwabar.offline{background:var(--mut)}
+.pwabar.offline .pwabar-btn{display:none}
+
+/* ===================== MERGE / SHARE MODAL ===================== */
+.merge-section{margin-top:14px}
+.share-row{display:flex;gap:8px;margin-top:6px}
+.share-row input{flex:1;min-width:0}
+.merge-msg{font-size:13px;font-weight:600;margin-top:10px;min-height:18px}
+.merge-msg.ok{color:var(--ok)}
+.merge-msg.err{color:var(--dan)}
+
+/* ===================== PNG EXPORT LEGEND ===================== */
+/* div ini hanya disuntik ke clone html2canvas, tidak ada di halaman asli.
+   Menampilkan legenda warna supaya penerima gambar tahu arti warna baris. */
+.png-legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:10px 14px;margin:0;border-top:2px solid #11132b;background:#eef2ff;font-size:12px;font-weight:700;color:#131536;font-family:inherit}
+.png-legend .leg-item{display:flex;align-items:center;gap:6px}
+.png-legend .leg-sw{width:14px;height:14px;border:1.5px solid #11132b;border-radius:4px;box-shadow:1px 1px 0 #11132b}
+.png-legend .leg-sw.teo{background:#f0f9ff;border-color:#0369a1}
+.png-legend .leg-sw.prak{background:#f5f3ff;border-color:#6d28d9}
+.png-legend .leg-sw.clash{background:#fef2f2;border-color:#dc2626}
+.png-legend .leg-title{margin-right:auto;font-size:13px}
+.png-legend .leg-meta{color:#6b7194;font-weight:600;font-size:11px}
+
 /* ===================== CALENDAR ===================== */
 .calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
 .daycol{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:8px;min-height:120px;transition:.15s}

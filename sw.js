@@ -33,6 +33,12 @@ self.addEventListener('activate', e => {
   );
 });
 
+// Izinkan app meminta SW baru (waiting) mengambil alih segera, lalu controllerchange
+// di app.js akan reload halaman supaya shell versi baru dipakai.
+self.addEventListener('message', e => {
+  if (e.data === 'skipWaiting') self.skipWaiting();
+});
+
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
