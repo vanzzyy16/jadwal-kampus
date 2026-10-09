@@ -76,6 +76,10 @@ body{
 }
 h1,h2,h3,h4{font-family:'Space Grotesk',sans-serif;margin:0;line-height:1.2}
 .wrap{max-width:1200px;margin:0 auto;padding:0 16px}
+/* layar lebar (PC besar): buang batas 1200px supaya sisi kiri/kanan tidak kosong.
+   Fluid: ikut lebar viewport sampai 1680px, lalu berhenti agar baris teks tetap
+   nyaman dibaca di monitor ultra-wide. */
+@media(min-width:1300px){.wrap{max-width:min(1680px,96vw)}}
 
 /* ===================== TOPBAR ===================== */
 .topbar{position:sticky;top:0;z-index:40;background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
@@ -112,6 +116,9 @@ h1,h2,h3,h4{font-family:'Space Grotesk',sans-serif;margin:0;line-height:1.2}
 
 /* ===================== HERO ===================== */
 .hero{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;margin:20px 0 16px;align-items:stretch}
+/* di layar lebar baris teks hero bisa jadi terlalu panjang -> batasi panjang baris
+   supaya tetap enak dibaca walau kartunya melebar. */
+.hero-text>p{max-width:62ch}
 .hero-text{background:var(--grad);color:#fff;border-radius:24px;padding:26px 26px 24px;box-shadow:var(--sh-lg);position:relative;overflow:hidden}
 .hero-text::before{content:'';position:absolute;inset:0;background:radial-gradient(400px 200px at 90% 10%,#ffffff22,transparent)}
 .hero-text::after{content:'🎓';position:absolute;right:8px;bottom:-28px;font-size:120px;opacity:.16;pointer-events:none}
