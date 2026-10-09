@@ -379,6 +379,11 @@ footer{text-align:center;color:var(--mut);padding:26px 16px 90px;font-size:13px}
   body[data-mtab="import"] #cardKalender,body[data-mtab="import"] #cardTabel,body[data-mtab="import"] .side .form-card{display:none}
   body[data-mtab="tambah"] .side{order:2}
   body[data-mtab="import"] .side{order:2}
+  /* mode Kode MK: kartu dipaksa tampil apa pun tab-nya. Toggle mode ada di dalam
+     sidebar dan TIDAK ikut disembunyikan per-tab, jadi user bisa menekan ⚡ Kode MK
+     saat masih di tab Jadwal — tanpa rule ini kartunya tetap display:none (line di atas)
+     dan UI upload master + parse kode jadi tidak terlihat sama sekali. */
+  body[data-mode="auto"][data-mtab="jadwal"] .side .auto-card{display:block}
 }
 @media(min-width:901px){#filterBody{display:block!important}}
 @media(max-width:560px){
