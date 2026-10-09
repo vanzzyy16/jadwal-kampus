@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Jadwal Kampus — Atur Jadwal Kuliah Anti-Bentrok</title>
-<meta name="description" content="Jadwal Kampus: gabungkan jadwal kuliah teori (Excel/CSV) dan praktikum (Excel/CSV) jadi satu. Cek bentrok otomatis, ekspor PDF, ICS, PNG. Gratis, tanpa daftar, untuk semua kampus." />
+<meta name="description" content="Jadwal Kampus: gabungkan jadwal kuliah teori dan praktikum (Excel/CSV/PDF) jadi satu. Cek bentrok otomatis, ekspor PDF, ICS, PNG. Gratis, tanpa daftar, untuk semua kampus." />
 <!-- Self-hosted fonts (latin + latin-ext, covers Indonesian): eliminates
      cross-origin to fonts.googleapis.com/gstatic.com, faster + better Lighthouse. -->
 <link rel="preload" href="fonts/inter-400-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -29,7 +29,7 @@
   })();
 </script>
 <meta property="og:title" content="Jadwal Kampus — Atur Jadwal Kuliah Anti-Bentrok" />
-<meta property="og:description" content="Gabungkan jadwal teori (Excel/CSV) dan praktikum (Excel/CSV) jadi satu. Cek bentrok otomatis, ekspor PDF, ICS, PNG." />
+<meta property="og:description" content="Gabungkan jadwal teori dan praktikum (Excel/CSV/PDF) jadi satu. Cek bentrok otomatis, ekspor PDF, ICS, PNG." />
 <meta property="og:type" content="website" />
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
@@ -131,26 +131,21 @@
         <button class="seg-btn" data-mode="auto" title="Auto-filter dari Kode MK">⚡ Kode MK</button>
       </div>
 
-      <div class="card import-card">
-        <div class="import-head"><span class="import-ico">📚</span><h3>Import Teori</h3><span class="fmt">XLSX / CSV</span></div>
-        <p class="muted">Format kolom sama dengan praktikum.</p>
-        <label class="drop" for="fileTeori" id="dropTeori">📤 <b>Pilih file Teori</b><small>klik / drag ke sini (XLSX, XLS, CSV)</small></label>
-        <input type="file" id="fileTeori" class="file-hidden" accept=".xlsx,.xls,.csv" aria-label="Pilih file teori (XLSX, XLS, CSV)" />
-        <div class="filerow"><span id="fileNameTeori" class="filename">Belum ada file dipilih</span></div>
-        <button id="btnTeori" class="btn-primary w">Proses Excel Teori</button>
-        <div id="previewTeori" class="preview" role="status" aria-live="polite"></div>
-        <div class="dl"><button id="btnTplTeori" class="link">⬇ template-teori.csv</button></div>
-      </div>
-
-      <div class="card import-card">
-        <div class="import-head"><span class="import-ico">🧪</span><h3>Import Praktikum</h3><span class="fmt">XLSX / CSV</span></div>
-        <p class="muted">Format kolom sama dengan teori.</p>
-        <label class="drop" for="filePraktikum" id="dropPraktikum">📤 <b>Pilih file Praktikum</b><small>klik / drag ke sini (XLSX, XLS, CSV)</small></label>
-        <input type="file" id="filePraktikum" class="file-hidden" accept=".xlsx,.xls,.csv" aria-label="Pilih file praktikum (XLSX, XLS, CSV)" />
-        <div class="filerow"><span id="fileNamePraktikum" class="filename">Belum ada file dipilih</span></div>
-        <button id="btnPraktikum" class="btn-primary w">Proses Excel Praktikum</button>
-        <div id="previewPraktikum" class="preview" role="status" aria-live="polite"></div>
-        <div class="dl"><button id="btnTplPraktikum" class="link">⬇ template-praktikum.csv</button></div>
+      <div class="card import-card" id="cardImport">
+        <div class="import-head"><span class="import-ico">📥</span><h3>Import Jadwal</h3><span class="fmt">XLSX / CSV / PDF</span></div>
+        <p class="muted">Satu file bisa berisi Teori &amp; Praktikum — tipe terdeteksi otomatis. Bila kolom tipe kosong, pakai default di bawah. Maks 4 file sekaligus.</p>
+        <label class="drop" for="fileJadwal" id="dropJadwal">📤 <b>Pilih file jadwal</b><small>klik / drag ke sini (XLSX, XLS, CSV, PDF) — maks 4 file</small></label>
+        <input type="file" id="fileJadwal" class="file-hidden" accept=".xlsx,.xls,.csv,.pdf" multiple aria-label="Pilih file jadwal (XLSX, XLS, CSV, PDF), maks 4 file" />
+        <div class="filerow">
+          <span id="fileNameJadwal" class="filename">Belum ada file dipilih</span>
+          <select id="tipeDefaultSel" class="sel" aria-label="Tipe default bila kolom tipe kosong">
+            <option value="Teori">Default: Teori</option>
+            <option value="Praktikum">Default: Praktikum</option>
+          </select>
+        </div>
+        <button id="btnImport" class="btn-primary w">Proses File</button>
+        <div id="previewJadwal" class="preview" role="status" aria-live="polite"></div>
+        <div class="dl"><button id="btnTplTeori" class="link">⬇ template-teori.csv</button><button id="btnTplPraktikum" class="link">⬇ template-praktikum.csv</button></div>
       </div>
 
       <!-- ===== AUTO KODE MK (mode cepat: upload master + ketik kode) ===== -->
@@ -247,9 +242,8 @@
           <span class="guide-chev">▾</span>
         </summary>
         <ol class="guide-steps">
-          <li><b>Download jadwal</b> dari portal kampus kamu (SIA, Labkom, SISKA, dll) — biasanya format <code>Excel (.xlsx)</code> atau <code>CSV</code>.</li>
-          <li><b>Import file Teori</b> lewat zona drop di atas. Kolom terdeteksi otomatis (matkul, kode, sks, hari, jam, kelas, ruang, dosen).</li>
-          <li><b>Import file Praktikum</b> (opsional) jika jadwal lab ada di file terpisah.</li>
+          <li><b>Download jadwal</b> dari portal kampus kamu (SIA, Labkom, SISKA, dll) — biasanya format <code>Excel (.xlsx)</code>, <code>CSV</code>, atau <code>PDF</code>.</li>
+          <li><b>Import file jadwal</b> lewat zona drop di atas. Satu file boleh berisi Teori &amp; Praktikum sekaligus — kolom terdeteksi otomatis (matkul, kode, sks, hari, jam, kelas, ruang, dosen). Maks 4 file, dan file yang sudah diproses tak akan diproses ganda.</li>
           <li><b>Cek bentrok</b> — konflik jadwal (jam tumpang tindih di hari sama) ditandai merah otomatis.</li>
           <li><b>Tambah manual</b> untuk kelas yang belum ada di Excel, atau edit dengan klik baris jadwal.</li>
           <li><b>Ekspor</b> ke <b>ICS</b> (Google/Apple Calendar), <b>PNG</b> (gambar), <b>PDF</b> (cetak), atau <b>CSV</b>.</li>

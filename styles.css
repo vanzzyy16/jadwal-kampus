@@ -302,7 +302,7 @@ body[data-mode="auto"] .side .import-card,body[data-mode="auto"] .side .form-car
 .png-legend .leg-meta{color:#6b7194;font-weight:600;font-size:11px}
 
 /* ===================== CALENDAR ===================== */
-.calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.calendar{display:grid;grid-template-columns:repeat(7,minmax(140px,1fr));gap:8px;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:thin;padding-bottom:6px}
 /* strip hari cepat (filter 1 hari) — horizontal scroll di mobile, justify di desktop */
 .daystrip{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 0 10px;scroll-snap-type:x proximity}
 .daystrip::-webkit-scrollbar{display:none}
@@ -312,7 +312,7 @@ body[data-mode="auto"] .side .import-card,body[data-mode="auto"] .side .form-car
 .daystrip .ds-btn.on{background:var(--grad);color:#fff;border-color:transparent}
 .daystrip .ds-btn.on .ds-n{background:rgba(255,255,255,.25);color:#fff}
 .daystrip .ds-btn.locked{box-shadow:0 0 0 2px var(--acc3)}
-.daycol{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:8px;min-height:120px;transition:.15s}
+.daycol{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:8px;min-height:120px;transition:.15s;scroll-snap-align:start}
 .daycol h4{margin:0 0 8px;font-size:12.5px;display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:2px solid var(--line)}
 .daycol h4{font-family:'Space Grotesk';font-weight:700;text-transform:uppercase;letter-spacing:.03em}
 .daycol h4 small{background:var(--grad);color:#fff;border:1.5px solid #11132b;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:700;box-shadow:2px 2px 0 #11132b;min-width:18px;text-align:center}
@@ -324,7 +324,7 @@ body[data-mode="auto"] .side .import-card,body[data-mode="auto"] .side .form-car
 .ev:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.2)}
 .ev.prak{background:var(--grad);color:#fff}
 .ev.bentrok{background:linear-gradient(135deg,#dc2626,#991b1b)!important;color:#fff;outline:2px solid #fff}
-.ev b{display:block;font-size:11px;font-weight:700}
+.ev b{display:block;font-size:11px;font-weight:700;overflow-wrap:anywhere}
 .ev small{opacity:.85}
 .ev-now{box-shadow:0 0 0 2px #fbbf24,0 4px 12px rgba(251,191,36,.4)}
 
@@ -334,9 +334,9 @@ body[data-mode="auto"] .side .import-card,body[data-mode="auto"] .side .form-car
 
 /* ===================== TABLE ===================== */
 .table-wrap{overflow:auto;max-height:520px;border-radius:var(--radius-sm)}
-table{width:100%;border-collapse:collapse;font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px;table-layout:auto}
 thead{position:sticky;top:0;z-index:2;background:var(--bg3);box-shadow:0 2px 0 var(--line)}
-th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:normal;overflow-wrap:anywhere}
 th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);font-weight:700;border-bottom:2px solid var(--ink2)}
 tbody tr{cursor:pointer;transition:background .12s,transform .12s}
 tbody tr:hover{background:var(--bg2);transform:translateX(2px)}

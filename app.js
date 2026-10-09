@@ -49,6 +49,16 @@ try {
   let p = localStorage.getItem(PICKS_KEY); kodePicks = JSON.parse(p || '[]'); if (!Array.isArray(kodePicks)) kodePicks = [];
 } catch (e) { kodePicks = []; }
 
+/* ---------- IMPORT ANTI-DUPLIKAT (file tetap setelah proses, tahan reload) ----------
+   Setiap file yang sukses diproses dicatat di processedFiles (Set). Key = name|size|lastModified
+   supaya file SAMA (nama+ukuran+timestamp) tak bisa diproses dua kali — klik Proses ulang
+   atau re-upload file identik = dilewati. Persisten di localStorage agar tahan reload.
+   Dibersihkan saat "Hapus semua" supaya user bisa re-import dari nol. */
+const PROC_KEY = 'jk-processed';
+const fileKey = f => `${f.name}|${f.size}|${f.lastModified}`;
+let processedFiles = new Set((() => { try { return JSON.parse(localStorage.getItem(PROC_KEY)) || []; } catch (e) { return []; } })());
+const saveProcessed = () => { try { localStorage.setItem(PROC_KEY, JSON.stringify([...processedFiles])); } catch (e) {} };
+
 /* ---------- string / time utils ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const toMin = s => { const str=String(s??'').trim(); if(str===''||str===':')return NaN; const p=str.split(':').map(Number); if(isNaN(p[0]))return NaN; return p[0]*60 + (isNaN(p[1])?0:p[1]); };
@@ -678,6 +688,9 @@ $('btnHapus').addEventListener('click', () => {
   if (!data.length) return toast('Belum ada data untuk dihapus');
   openConfirm('Hapus SEMUA jadwal?', `Semua ${data.length} jadwal akan dihapus permanen.`, () => {
     data = []; save(); render(); toast('Semua jadwal dihapus ✓');
+    // bersihkan daftar file terproses supaya user bisa re-import file yang sama
+    // tanpa dianggap duplikat (mulai dari nol).
+    processedFiles = new Set(); saveProcessed();
   });
 });
 $('btnSort').addEventListener('click', () => {
@@ -1522,14 +1535,108 @@ function importExcel(fileId,previewId,dropId,tipeDefault,tipeLabel,intoMaster){
   };
   rd.readAsArrayBuffer(f);
 }
-$('btnTeori').addEventListener('click',()=>importExcel('fileTeori','previewTeori','dropTeori','Teori','teori'));
-$('btnPraktikum').addEventListener('click',()=>importExcel('filePraktikum','previewPraktikum','dropPraktikum','Praktikum','praktikum'));
+/* ============================================================
+   IMPORT JADWAL (1 kartu, multi-file, anti-duplikat, XLSX/CSV/PDF)
+   - readFileRows: baca 1 file → rows[][] (CSV/XLSX pakai parser lama;
+     PDF pakai PDF.js dynamic import lalu umpan text ke parseCSVText).
+   - importJadwalMulti: proses FileList, lewati file yang sudah diproses,
+     catat file sukses di processedFiles (persisten, anti-duplikat tahan reload).
+   ============================================================ */
+async function readFileRows(file){
+  const isCSV=/\.csv$/i.test(file.name)||String(file.type||'').includes('csv');
+  const isPDF=/\.pdf$/i.test(file.name)||String(file.type||'').includes('pdf');
+  const buf=await file.arrayBuffer();
+  if(isPDF){
+    // PDF.js v6 = ESM-only (.mjs). Dynamic import supaya 520KB lib cuma dimuat
+    // saat ada PDF, bukan tiap load halaman. Worker di-set ke URL jsdelivr sama.
+    let lib;
+    try{ lib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/legacy/build/pdf.min.mjs'); }
+    catch(_){ throw new Error('Pustaka PDF belum termuat — cek internet lalu refresh'); }
+    lib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/legacy/build/pdf.worker.min.mjs';
+    const pdf=await lib.getDocument({data:new Uint8Array(buf)}).promise;
+    const lines=[];
+    for(let pNum=1;pNum<=pdf.numPages;pNum++){
+      const page=await pdf.getPage(pNum);
+      const tc=await page.getTextContent(); // items: {str, transform:[a,b,c,d,x,y], width}
+      // kelompokkan per baris (y sama ±2px), urut per x
+      const rows={};
+      for(const it of tc.items){
+        if(!it.str || !it.str.trim()) continue;
+        const y=Math.round(it.transform[5]);
+        (rows[y]=rows[y]||[]).push({x:it.transform[4], s:it.str});
+      }
+      const ys=Object.keys(rows).map(Number).sort((a,b)=>b-a); // y besar = atas
+      for(const y of ys){
+        const segs=rows[y].sort((a,b)=>a.x-b.x);
+        // sisipkan tab antar-segmen jarak jauh agar parseCSVText gap-aligned
+        // menangkap kolom (lihat parseCSVText: [ ]{2,}| {2,} → tab).
+        let line='';
+        for(let i=0;i<segs.length;i++){
+          if(i>0 && (segs[i].x - segs[i-1].x) > 30) line+='\t';
+          line+=segs[i].s;
+        }
+        line=line.trim();
+        if(line) lines.push(line);
+      }
+    }
+    if(!lines.length) throw new Error('PDF tidak berisi teks terpilih (kemungkinan scan gambar) — coba file Excel/CSV atau PDF hasil export');
+    return { rows: parseCSVText(lines.join('\n')) };
+  }
+  if(isCSV){
+    let text; try{ text=new TextDecoder('utf-8').decode(new Uint8Array(buf)); }catch(_){ text=Array.from(new Uint8Array(buf)).map(b=>String.fromCharCode(b)).join(''); }
+    return { rows: parseCSVText(text) };
+  }
+  if(typeof XLSX==='undefined') throw new Error('Pustaka Excel belum termuat — cek internet lalu refresh');
+  const wb=XLSX.read(buf,{type:'array',cellDates:true});
+  if(!wb.SheetNames.length) throw new Error('tidak ada sheet di file');
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  if(!ws||!ws['!ref']) throw new Error('sheet pertama kosong');
+  return { rows: XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true,blankrows:false}) };
+}
+
+async function importJadwalMulti(){
+  const fl=$('fileJadwal').files;
+  if(!fl||!fl.length) return toast('Pilih file jadwal dulu (teori/praktikum/PDF)');
+  if(fl.length>4) return toast('Maksimal 4 file sekaligus — hapus yang kelebihan');
+  const tipeDefault=$('tipeDefaultSel').value;
+  let total=0,skipFiles=[],errFiles=[],parts=[];
+  $('previewJadwal').textContent='⏳ Memproses '+fl.length+' file ...';
+  for(const f of fl){
+    const k=fileKey(f);
+    if(processedFiles.has(k)){ skipFiles.push(f.name); continue; }
+    try{
+      const { rows }=await readFileRows(f);
+      if(!rows||!rows.length){ errFiles.push(f.name+' (kosong/tak terbaca)'); continue; }
+      const r=importRows(rows,tipeDefault,data); // data=append; tipe auto per baris via normTipe
+      total+=r.n;
+      parts.push(`${f.name}: ${r.n} baris`+(r.lewat?` (${r.lewat} dilewati)`:'')+(r.headerRow>0?` (header baris ${r.headerRow+1})`:''));
+      processedFiles.add(k); // catat SETELAH sukses → anti-duplikat
+    }catch(e){ errFiles.push(f.name+': '+e.message); }
+  }
+  saveProcessed();
+  if(total){ save(); render(); }
+  // preview: hasil per file + skip + error. JANGAN clear input.value (file tetap).
+  let msg=parts.length?'✓ '+parts.join(' • '):'';
+  if(skipFiles.length) msg+=(msg?' | ':'')+'⏭️ sudah diproses (dilewati): '+skipFiles.join(', ');
+  if(errFiles.length) msg+=(msg?' | ':'')+'✗ gagal: '+errFiles.join(', ');
+  if(!msg) msg='Tidak ada baris valid dari file terpilih.';
+  $('previewJadwal').textContent=msg;
+  toast(total?total+' jadwal ditambahkan ✓':(skipFiles.length?'File sudah diproses, dilewati':'Tidak ada baris valid'));
+}
+$('btnImport').addEventListener('click', importJadwalMulti);
 
 /* ============================================================
    DRAG & DROP
    ============================================================ */
 // store the drop zone <-> file input mapping so the ✕ clear button works
-const DROP_MAP = { dropTeori:'fileTeori', dropPraktikum:'filePraktikum', dropMaster:'fileMaster' };
+const DROP_MAP = { dropJadwal:'fileJadwal', dropMaster:'fileMaster' };
+// ringkas FileList jadi label tampilan: "nama.ext" atau "nama.ext +N lainnya"
+function fileListLabel(fl){
+  if(!fl||!fl.length) return { name:'', text:'' };
+  const first=fl[0];
+  const name = fl.length>1 ? `${first.name} +${fl.length-1} lainnya` : first.name;
+  return { name, text:fl.length+' file — klik tombol Proses.' };
+}
 function paintDrop(dropId,file){
   const el=$(dropId);if(!el)return;
   if(file){
@@ -1538,11 +1645,8 @@ function paintDrop(dropId,file){
     const clr=el.querySelector('.drop-clear');if(clr)clr.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();clearFile(dropId);});
   }else{
     el.classList.remove('filled');
-    // restore the original placeholder label
-    const label = dropId==='dropTeori'
-      ? '📤 <b>Pilih file Teori</b><small>klik / drag ke sini (XLSX, XLS, CSV)</small>'
-      : dropId==='dropPraktikum'
-      ? '📤 <b>Pilih file Praktikum</b><small>klik / drag ke sini (XLSX, XLS, CSV)</small>'
+    const label = dropId==='dropJadwal'
+      ? '📤 <b>Pilih file jadwal</b><small>klik / drag ke sini (XLSX, XLS, CSV, PDF) — maks 4 file</small>'
       : '📤 <b>Pilih file jadwal lengkap</b><small>Excel/CSV semua kelas dari Labkom/SIA</small>';
     el.innerHTML=label;
   }
@@ -1551,7 +1655,7 @@ function clearFile(dropId){
   const inputId=DROP_MAP[dropId]; if(!inputId)return;
   const inp=$(inputId); try{inp.value=''}catch(_){}
   paintDrop(dropId,null);
-  const map={dropTeori:['previewTeori','fileNameTeori'],dropPraktikum:['previewPraktikum','fileNamePraktikum'],dropMaster:['previewMaster','fileNameMaster']};
+  const map={dropJadwal:['previewJadwal','fileNameJadwal'],dropMaster:['previewMaster','fileNameMaster']};
   const [prevId,fnId]=map[dropId]||['',''];
   $(prevId).textContent='';
   $(fnId).textContent='Belum ada file dipilih';
@@ -1563,12 +1667,13 @@ function friendlySize(b){
   if(b<1048576)return (b/1024).toFixed(0)+' KB';
   return (b/1048576).toFixed(1)+' MB';
 }
-[['fileTeori','previewTeori','dropTeori','fileNameTeori'],['filePraktikum','previewPraktikum','dropPraktikum','fileNamePraktikum'],['fileMaster','previewMaster','dropMaster','fileNameMaster']].forEach(([f,p,d,fn])=>{
+[['fileJadwal','previewJadwal','dropJadwal','fileNameJadwal'],['fileMaster','previewMaster','dropMaster','fileNameMaster']].forEach(([f,p,d,fn])=>{
   $(f).addEventListener('change',()=>{
-    const file=$(f).files[0];paintDrop(d,file);
-    if(file){
-      $(p).textContent='Siap diproses: '+file.name+' — klik tombol Proses.';
-      $(fn).textContent=file.name;$(fn).classList.add('ok');
+    const fl=$(f).files; paintDrop(d,fl[0]||null);
+    if(fl&&fl.length){
+      const lab=fileListLabel(fl);
+      $(p).textContent='Siap diproses: '+lab.text;
+      $(fn).textContent=lab.name; $(fn).classList.add('ok');
     }
   });
 });
@@ -1580,14 +1685,15 @@ function armDrop(dropId,inputId){
     const fl=e.dataTransfer&&e.dataTransfer.files;
     if(fl&&fl.length){
       $(inputId).files=fl;paintDrop(dropId,fl[0]);
-      const map={fileTeori:['previewTeori','fileNameTeori'],filePraktikum:['previewPraktikum','fileNamePraktikum'],fileMaster:['previewMaster','fileNameMaster']};
+      const map={fileJadwal:['previewJadwal','fileNameJadwal'],fileMaster:['previewMaster','fileNameMaster']};
       const [prev,fn]=map[inputId]||['',''];
-      $(prev).textContent='Siap diproses: '+fl[0].name+' — klik tombol Proses.';
-      $(fn).textContent=fl[0].name;$(fn).classList.add('ok');
+      const lab=fileListLabel(fl);
+      $(prev).textContent='Siap diproses: '+lab.text;
+      $(fn).textContent=lab.name; $(fn).classList.add('ok');
     }
   });
 }
-armDrop('dropTeori','fileTeori');armDrop('dropPraktikum','filePraktikum');armDrop('dropMaster','fileMaster');
+armDrop('dropJadwal','fileJadwal');armDrop('dropMaster','fileMaster');
 
 /* ============================================================
    INIT
