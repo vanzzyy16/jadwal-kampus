@@ -60,6 +60,7 @@
         <div id="shareMenu" class="menu" role="menu" hidden>
           <button id="btnShareLink" role="menuitem">🔗 Bagikan Jadwal (link)</button>
           <button id="btnExportICS" role="menuitem">📆 Kalender (ICS)</button>
+          <button id="btnExportGCal" role="menuitem">📅 Google Calendar</button>
           <button id="btnExportPNG" role="menuitem">🖼️ Gambar (PNG)</button>
           <button id="btnPrint" role="menuitem">🖨️ PDF / Cetak</button>
           <button id="btnCSV" role="menuitem">📄 Data (CSV)</button>
@@ -214,6 +215,9 @@
             <button class="seg-btn" data-view="list" title="Daftar harian">☰</button>
           </div>
         </div>
+        <!-- strip hari cepat: tap untuk filter 1 hari, tap lagi "Semua" untuk reset.
+             Long-press mengunci filter hari (tidak hilang saat render). -->
+        <div id="dayStrip" class="daystrip" role="tablist" aria-label="Filter hari cepat"></div>
         <div id="calendar" class="calendar"></div>
         <div id="calList" class="cal-list hidden"></div>
       </div>

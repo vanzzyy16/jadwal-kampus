@@ -303,6 +303,15 @@ body[data-mode="auto"] .side .import-card,body[data-mode="auto"] .side .form-car
 
 /* ===================== CALENDAR ===================== */
 .calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+/* strip hari cepat (filter 1 hari) — horizontal scroll di mobile, justify di desktop */
+.daystrip{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 0 10px;scroll-snap-type:x proximity}
+.daystrip::-webkit-scrollbar{display:none}
+.daystrip .ds-btn{flex:none;scroll-snap-align:start;border:1px solid var(--line);background:var(--bg2);color:var(--ink2);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap}
+.daystrip .ds-btn .ds-n{display:inline-block;min-width:16px;text-align:center;font-size:10px;background:var(--bg3);border-radius:999px;padding:1px 5px;margin-left:5px;color:var(--mut)}
+.daystrip .ds-btn:hover{border-color:var(--acc);color:var(--acc)}
+.daystrip .ds-btn.on{background:var(--grad);color:#fff;border-color:transparent}
+.daystrip .ds-btn.on .ds-n{background:rgba(255,255,255,.25);color:#fff}
+.daystrip .ds-btn.locked{box-shadow:0 0 0 2px var(--acc3)}
 .daycol{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:8px;min-height:120px;transition:.15s}
 .daycol h4{margin:0 0 8px;font-size:12.5px;display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:2px solid var(--line)}
 .daycol h4{font-family:'Space Grotesk';font-weight:700;text-transform:uppercase;letter-spacing:.03em}
@@ -716,6 +725,9 @@ thead th{box-shadow:inset 0 -1px 0 var(--line)}
 
 /* calendar day columns: border tegas */
 .daycol{border:var(--bord);border-radius:var(--radius-brutal)}
+.daystrip .ds-btn{border:var(--bord);border-radius:999px;box-shadow:2px 2px 0 #11132b}
+[data-theme=dark] .daystrip .ds-btn{box-shadow:2px 2px 0 #e9ebff}
+.daystrip .ds-btn.on{box-shadow:var(--brutal-sh-sm)}
 .daycol.today{box-shadow:var(--brutal-sh-sm)}
 
 /* alert: brutal */

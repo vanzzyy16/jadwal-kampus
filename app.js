@@ -102,6 +102,7 @@ function tandaiBentrok(list) {
 /* ---------- filters ---------- */
 let curSort = 'hari'; // hari | mulai | matkul
 let fHariVal = '';     // day chip value
+let fHariLocked = false; // long-pressed day strip → filter stays across render
 let fTipeVal = '';     // tipe chip value
 function filtered() {
   const q = $('q').value.toLowerCase().trim();
@@ -185,6 +186,55 @@ function render() {
   }
   // sync day chip highlight with current value
   if (chips) chips.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', (c.dataset.h || '') === fHariVal));
+
+  /* --- day strip (quick per-day filter) --- */
+  const ds = $('dayStrip');
+  if (ds) {
+    // build once; counts (badge) updated each render
+    if (!ds.dataset.built) {
+      ds.dataset.built = '1';
+      const allBtn = `<button class="ds-btn on" data-h="" role="tab">Semua<span class="ds-n">${data.length}</span></button>`;
+      ds.innerHTML = allBtn + HARI.map(h => `<button class="ds-btn" data-h="${h}" role="tab">${h.slice(0,3)}<span class="ds-n">0</span></button>`).join('');
+      let pressTimer = null;
+      ds.querySelectorAll('.ds-btn').forEach(b => b.addEventListener('click', () => {
+        // tap = toggle filter 1 hari (atau reset ke Semua kalau sama)
+        const h = b.dataset.h || '';
+        const next = (fHariVal === h && !fHariLocked) ? '' : h;
+        fHariVal = next;
+        fHariLocked = false; // tap biasa = tidak kunci
+        syncDayStrip(); render();
+      }));
+      // long-press = lock filter hari (tetap walau data berganti/render)
+      ds.querySelectorAll('.ds-btn').forEach(b => {
+        const start = () => { pressTimer = setTimeout(() => {
+          pressTimer = null;
+          fHariVal = b.dataset.h || '';
+          fHariLocked = !!b.dataset.h; // "Semua" tidak perlu kunci
+          syncDayStrip(); render();
+          if (fHariLocked) toast('Filter ' + (b.dataset.h || 'Semua') + ' terkunci 🔒');
+        }, 500); };
+        const cancel = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+        b.addEventListener('pointerdown', start);
+        b.addEventListener('pointerup', cancel);
+        b.addEventListener('pointerleave', cancel);
+        b.addEventListener('pointercancel', cancel);
+      });
+    }
+    // update counts
+    const counts = { '': data.length };
+    HARI.forEach(h => counts[h] = data.filter(d => d.hari === h).length);
+    ds.querySelectorAll('.ds-btn').forEach(b => {
+      const n = b.querySelector('.ds-n');
+      if (n) n.textContent = counts[b.dataset.h || ''] ?? 0;
+    });
+    syncDayStrip();
+  }
+  function syncDayStrip() {
+    ds?.querySelectorAll('.ds-btn').forEach(b => {
+      b.classList.toggle('on', (b.dataset.h || '') === fHariVal);
+      b.classList.toggle('locked', fHariLocked && (b.dataset.h || '') === fHariVal);
+    });
+  }
 
   /* --- calendar (grid) --- */
   const cal = $('calendar');
@@ -612,7 +662,7 @@ document.querySelectorAll('.chip-row .chip[data-t]').forEach(c => c.addEventList
 $('btnFilter').addEventListener('click', () => $('filterBody').classList.toggle('open'));
 $('btnReset').addEventListener('click', () => {
   $('q').value = '';
-  fHariVal = ''; fTipeVal = '';
+  fHariVal = ''; fHariLocked = false; fTipeVal = '';
   $('fProdi').value = ''; $('fKelas').value = '';
   document.querySelectorAll('.chip[data-t]').forEach(x => x.classList.toggle('on', x.dataset.t === ''));
   document.querySelectorAll('#chipHari .chip').forEach(x => x.classList.toggle('on', x.dataset.h === ''));
@@ -641,6 +691,47 @@ document.querySelectorAll('.seg-btn[data-view]').forEach(b => b.addEventListener
   $('calendar').classList.toggle('hidden', !grid);
   $('calList').classList.toggle('hidden', grid);
 }));
+
+/* ============================================================
+   SWIPE on calendar / list — navigasi filter hari (mobile-friendly)
+   Swipe kiri → hari berikutnya; kanan → sebelumnya. Lebih cepat daripada
+   buka filter panel. Hanya aktif di mobile (lebar ≤900) supaya tidak
+   mengganggu scroll horizontal grid di desktop.
+   ============================================================ */
+(function armSwipe() {
+  let sx = 0, sy = 0, armed = false;
+  const start = e => {
+    if (window.innerWidth > 900) return;
+    const t = e.touches ? e.touches[0] : e;
+    sx = t.clientX; sy = t.clientY; armed = true;
+  };
+  const move = e => {
+    if (!armed) return;
+    const t = e.touches ? e.touches[0] : e;
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.6) {
+      armed = false;
+      const cur = HARI.indexOf(fHariVal);
+      let next;
+      if (cur === -1) next = dx < 0 ? 0 : HARI.length - 1; // dari "Semua": kiri→Senin, kanan→Sabtu
+      else next = (cur + (dx < 0 ? 1 : -1) + HARI.length) % HARI.length;
+      fHariVal = HARI[next];
+      fHariLocked = false;
+      render();
+      // scroll hari tsb ke tampil (di strip)
+      const btn = $('dayStrip')?.querySelector(`.ds-btn[data-h="${fHariVal}"]`);
+      btn?.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+    }
+  };
+  const end = () => { armed = false; };
+  const zones = [$('calendar'), $('calList')];
+  zones.forEach(z => {
+    if (!z) return;
+    z.addEventListener('touchstart', start, { passive: true });
+    z.addEventListener('touchmove', move, { passive: true });
+    z.addEventListener('touchend', end, { passive: true });
+  });
+})();
 
 /* ============================================================
    MOBILE TABS / NAV
@@ -970,6 +1061,58 @@ $('btnExportICS').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   toast('ICS diunduh — import ke Google Calendar 📆');
 });
+
+/* ============================================================
+   EXPORT KE GOOGLE CALENDAR (langsung, tanpa file ICS)
+   - Pakai endpoint https://www.google.com/calendar/render?action=TEMPLATE
+     dengan parameters: text (judul), dates (start-end UTC), details, location,
+     recurrence (RRULE). Google render event preview → user tinggal Save.
+   - Karena 1 link = 1 event, kita buka jendela per kelas (atau 1 prompt pilih).
+   - "Semua" → buka tab per kelas berurutan (browser mungkin blok popup banyak;
+     mencegah: buka 1 per 1 lewat loop dengan jeda, atau tawarkan modal pilih).
+   ============================================================ */
+$('btnExportGCal').addEventListener('click', () => {
+  const list = filtered();
+  if (!list.length) return toast('Belum ada data (sesuai filter)');
+  if (list.length === 1) { openGCalEvent(list[0]); return; }
+  // banyak kelas → tawarkan: semua sekaligus (popup) atau satu per satu lewat toast
+  openConfirm(
+    'Tambah ke Google Calendar?',
+    `${list.length} kelas akan dibuka sebagai event di Google Calendar. Browser mungkin memblokir popup banyak — izinkan popup untuk situs ini kalau tidak muncul semua.`,
+    () => {
+      let opened = 0;
+      list.forEach((d, i) => setTimeout(() => { openGCalEvent(d, true); opened++; }, i * 350));
+      toast(`${list.length} event dikirim ke Google Calendar 📅`);
+    }
+  );
+});
+function openGCalEvent(d, silent) {
+  // hitung tanggal "hari ini atau minggu ini" untuk hari tsb, sama logika dgn ICS
+  const dayIdx = { Senin:1, Selasa:2, Rabu:3, Kamis:4, Jumat:5, Sabtu:6, Minggu:0 };
+  const target = dayIdx[d.hari]; if (target == null) { if (!silent) toast('Hari tidak valid'); return; }
+  const dt = new Date();
+  const diff = (target - dt.getDay() + 7) % 7;
+  dt.setDate(dt.getDate() + diff);
+  // Jakarta = UTC+7. WIB 08:00 → 01:00Z. Bangun UTC timestamps.
+  const toUTC = (date, hhmm) => {
+    const [h, m] = String(hhmm || '08:00').split(':').map(Number);
+    const u = new Date(date);
+    u.setUTCHours((h - 7 + 24) % 24, m || 0, 0, 0);
+    return u;
+  };
+  const sDt = toUTC(dt, d.mulai);
+  const eDt = toUTC(dt, d.selesai);
+  // bedakan tanggal end kalau lintas tengah malam (jarang, tapi aman)
+  if (toMin(d.selesai) <= toMin(d.mulai)) eDt.setDate(eDt.getDate() + 1);
+  const fmt = u => u.getUTCFullYear() + String(u.getUTCMonth()+1).padStart(2,'0') + String(u.getUTCDate()).padStart(2,'0') + 'T' + String(u.getUTCHours()).padStart(2,'0') + String(u.getUTCMinutes()).padStart(2,'0') + '00Z';
+  const text = encodeURIComponent((d.matkul || 'Kelas') + (d.kelas ? ' (' + d.kelas + ')' : ''));
+  const dates = fmt(sDt) + '/' + fmt(eDt);
+  const details = encodeURIComponent((d.dosen || '') + (d.kode ? ' • ' + d.kode : '') + ' • ' + (d.sks||0) + ' SKS • via Jadwal Kampus');
+  const location = encodeURIComponent([d.ruang, d.kelas].filter(Boolean).join(' • '));
+  const recur = encodeURIComponent('RRULE:FREQ=WEEKLY;COUNT=16');
+  const url = `https://www.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}&location=${location}&recur=${recur}`;
+  window.open(url, '_blank', 'noopener');
+}
 
 $('btnExportPNG').addEventListener('click', () => {
   if (!data.length) return toast('Belum ada data');
