@@ -195,8 +195,11 @@ function render() {
       ds.dataset.built = '1';
       const allBtn = `<button class="ds-btn on" data-h="" role="tab">Semua<span class="ds-n">${data.length}</span></button>`;
       ds.innerHTML = allBtn + HARI.map(h => `<button class="ds-btn" data-h="${h}" role="tab">${h.slice(0,3)}<span class="ds-n">0</span></button>`).join('');
-      let pressTimer = null;
+      let pressTimer = null, didLongPress = false;
       ds.querySelectorAll('.ds-btn').forEach(b => b.addEventListener('click', () => {
+        // klik setelah long-press → batal (long-press sudah mengunci). Tanpa ini
+        // handler click berjalan setelah timer & menimpa fHariLocked=false.
+        if (didLongPress) { didLongPress = false; return; }
         // tap = toggle filter 1 hari (atau reset ke Semua kalau sama)
         const h = b.dataset.h || '';
         const next = (fHariVal === h && !fHariLocked) ? '' : h;
@@ -206,13 +209,16 @@ function render() {
       }));
       // long-press = lock filter hari (tetap walau data berganti/render)
       ds.querySelectorAll('.ds-btn').forEach(b => {
-        const start = () => { pressTimer = setTimeout(() => {
-          pressTimer = null;
-          fHariVal = b.dataset.h || '';
-          fHariLocked = !!b.dataset.h; // "Semua" tidak perlu kunci
-          syncDayStrip(); render();
-          if (fHariLocked) toast('Filter ' + (b.dataset.h || 'Semua') + ' terkunci 🔒');
-        }, 500); };
+        const start = () => {
+          didLongPress = false;
+          pressTimer = setTimeout(() => {
+            pressTimer = null; didLongPress = true;
+            fHariVal = b.dataset.h || '';
+            fHariLocked = !!b.dataset.h; // "Semua" tidak perlu kunci
+            syncDayStrip(); render();
+            if (fHariLocked) toast('Filter ' + (b.dataset.h || 'Semua') + ' terkunci 🔒');
+          }, 500);
+        };
         const cancel = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
         b.addEventListener('pointerdown', start);
         b.addEventListener('pointerup', cancel);
