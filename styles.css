@@ -229,6 +229,13 @@ body[data-mode="auto"] .auto-card{display:block}
 body[data-mode="auto"] .side .import-card,body[data-mode="auto"] .side .form-card{display:none}
 .auto-card .muted{display:block;margin:9px 0 4px}
 
+/* tempel tabel dari portal kampus (alternatif upload file) */
+.paste-wrap{margin:10px 0 4px;border:1px dashed var(--line);border-radius:12px;padding:8px 10px;background:var(--bg2)}
+.paste-wrap>summary{cursor:pointer;font-size:12.5px;font-weight:700;color:var(--acc)}
+.paste-wrap[open]>summary{margin-bottom:2px}
+.paste-wrap>p.muted{margin:6px 0 0;font-size:11.5px;line-height:1.45}
+.paste-wrap textarea{font-size:12.5px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
 /* daftar hasil parse kode MK */
 .kode-result{margin-top:10px}
 .kode-result:empty{display:none}
@@ -246,6 +253,21 @@ body[data-mode="auto"] .side .import-card,body[data-mode="auto"] .side .form-car
 [data-theme=dark] .kode-chip.bad{background:#2b0f12;color:#fca5a5;border-color:#fca5a5}
 [data-theme=dark] .kode-chip.multi{background:#2d1b4e;color:#ddd6fe;border-color:#ddd6fe}
 .kode-entry .kode-sel{margin:0;width:auto;flex:1;min-width:150px;padding:7px 9px;font-size:12.5px}
+
+/* peringatan dini bentrok + saran ganti kelas (di dalam kartu Auto Kode MK) */
+.precheck,.suggest{font-size:12px;line-height:1.5;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-top:8px}
+.precheck{background:var(--dan-bg);color:#991b1b}
+.precheck ul{margin:6px 0 0;padding-left:16px}
+.precheck li{margin-bottom:3px}
+.suggest{background:var(--ok-bg);color:#065f46}
+.suggest ul{margin:6px 0 0;padding-left:0;list-style:none}
+.suggest li{display:flex;gap:8px;align-items:flex-start;margin-top:7px}
+.suggest li small{display:block;color:var(--mut);font-size:11px;margin-bottom:2px}
+.saran-kode{font-weight:700;flex:none;border:1.5px solid currentColor;border-radius:6px;padding:2px 7px;font-size:10.5px;box-shadow:1px 1px 0 currentColor}
+.suggest li small{color:#047857}
+[data-theme=dark] .precheck{background:#2b0f12;color:#fca5a5}
+[data-theme=dark] .suggest{background:#0b2818;color:#6ee7b7}
+[data-theme=dark] .suggest li small{color:#34d399}
 
 /* ===================== CALENDAR ===================== */
 .calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
@@ -666,6 +688,10 @@ thead th{box-shadow:inset 0 -1px 0 var(--line)}
 
 /* alert: brutal */
 .alert{border:var(--bord);border-radius:var(--radius-brutal);box-shadow:var(--brutal-sh-sm)}
+
+/* peringatan dini bentrok + saran kelas: brutal, biar sejalan dgn alert utama */
+.precheck,.suggest{border:var(--bord);border-radius:var(--radius-brutal);box-shadow:var(--brutal-sh-sm)}
+.paste-wrap{border:var(--bord);border-style:dashed;border-radius:var(--radius-brutal)}
 
 /* modal: brutal */
 .modal-panel{border:var(--bord);box-shadow:var(--brutal-sh-lg)}

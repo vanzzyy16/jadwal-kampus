@@ -573,6 +573,10 @@ function buildMasterIndex() {
   }
   return idx;
 }
+/* kelas yang benar-benar dipakai tiap kode di data[] — dipakai renderKodeResult
+   supaya chip ✓ ikut menampilkan kelas hasil auto-ambil (kode 1-kelas / fallback),
+   bukan cuma yang dipilih manual. */
+const effectiveKelas = new Map(); // normKode → kelas
 /* regenerasi data[] dari master[] + kodePicks[].
    - kode yang cocok 1 kelas & pick.kelas kosong → auto-ambil
    - kode multi-kelas & pick.kelas kosong → TIDAK masuk (tunggu user pilih)
@@ -582,30 +586,35 @@ function regenFromMaster() {
   if (!master.length) return;
   const idx = buildMasterIndex();
   const out = [];
+  effectiveKelas.clear();
   for (const pick of kodePicks) {
     const rows = idx[pick.kode] || [];
     if (!rows.length) continue;
     if (pick.kelas) {
       const m = rows.filter(r => normKode(r.kelas) === normKode(pick.kelas));
-      if (m.length) out.push(...m.map(cloneRow));
-      else out.push(...rows.map(cloneRow)); // fallback: kelas hilang → ambil semua
+      if (m.length) { out.push(...m.map(cloneRow)); effectiveKelas.set(pick.kode, m[0].kelas || pick.kelas); }
+      else { out.push(...rows.map(cloneRow)); effectiveKelas.set(pick.kode, rows[0].kelas || ''); } // fallback: kelas hilang → ambil semua
     } else if (rows.length === 1) {
       out.push(cloneRow(rows[0])); // unambiguous → auto-ambil
+      effectiveKelas.set(pick.kode, rows[0].kelas || '');
     }
     // rows.length>1 & no kelas picked → skip (tunggu pilihan)
   }
-  data = out; save(); render();
+  data = out; save();
+  renderKodeResult(); // effectiveKelas baru terisi lengkap → refresh chip + precheck
+  render();
 }
 function cloneRow(d) {
   const c = Object.assign({}, d); c.id = uid(); return c;
 }
-/* render #kodeResult: tampilkan status tiap kode (✓ hijau / ✗ merah / pilih-kelas) */
+/* render #kodeResult: tampilkan status tiap kode (✓ hijau / ✗ merah / pilih-kelas)
+   + peringatan dini bentrok antar kode yang dipilih, sebelum masuk ke jadwal. */
 function renderKodeResult() {
   const box = $('kodeResult');
   if (!box) return;
   if (!kodePicks.length) { box.innerHTML = ''; return; }
   const idx = buildMasterIndex();
-  box.innerHTML = kodePicks.map((pick, i) => {
+  const rowsHtml = kodePicks.map((pick, i) => {
     const rows = idx[pick.kode] || [];
     if (!rows.length) {
       return `<div class="kode-entry err"><span class="kode-chip bad">✗ ${esc(pick.kode)}</span><small>tidak ditemukan di master</small></div>`;
@@ -614,10 +623,53 @@ function renderKodeResult() {
       const r = rows[0];
       return `<div class="kode-entry ok"><span class="kode-chip good">✓ ${esc(r.kode||pick.kode)}</span><b>${esc(r.matkul)}</b><small>${esc(r.kelas||'-')} • ${esc(r.hari||'-')} • ${fmtTime(r.mulai)}–${fmtTime(r.selesai)}</small></div>`;
     }
-    // multi-kelas → dropdown
-    const opts = rows.map(r => `<option value="${esc(r.kelas||'')}" ${normKode(r.kelas)===normKode(pick.kelas)?'selected':''}>${esc(r.kelas||'-')} • ${esc(r.dosen||'-')} • ${fmtTime(r.mulai)}</option>`).join('');
+    // multi-kelas → dropdown; kelas yang sudah efektif ditandai supaya user tahu
+    // baris mana yang sedang dipakai jadwal saat pick.kelas masih kosong (fallback).
+    const eff = effectiveKelas.get(pick.kode);
+    const opts = rows.map(r => `<option value="${esc(r.kelas||'')}" ${selectMark(r, pick, eff)}>${esc(r.kelas||'-')} • ${esc(r.dosen||'-')} • ${fmtTime(r.mulai)}</option>`).join('');
     return `<div class="kode-entry pick"><span class="kode-chip multi">${esc(pick.kode)} ×${rows.length}</span><select class="kode-sel" data-ki="${i}"><option value="">— pilih kelas —</option>${opts}</select></div>`;
   }).join('');
+  box.innerHTML = rowsHtml + precheckBentrok() + suggestKelas();
+}
+function selectMark(r, pick, eff) {
+  if (pick.kelas) return normKode(r.kelas) === normKode(pick.kelas) ? 'selected' : '';
+  return eff && normKode(r.kelas) === normKode(eff) ? 'selected' : '';
+}
+/* kelas alternatif per kode multi-kelas — supaya saran "pindah kelas" di bawah
+   bisa menyebut U+201c kelas mana yang jamnya tidak bentrok U+201d. */
+function kelasOpsi(kode) {
+  const rows = (buildMasterIndex()[kode] || []).filter(r => r.hari && r.mulai && r.selesai);
+  return rows.map(r => ({ kelas: r.kelas || '', hari: r.hari, mulai: r.mulai, selesai: r.selesai, matkul: r.matkul || '', dosen: r.dosen || '' }));
+}
+/* deteksi bentrok yang AKAN terjadi begitu kode masuk ke jadwal. Ini beda dari
+   alert merah di halaman (yang membaca data[] setelah terlanjur masuk) —
+   di sini user masih bisa ganti kelas / buang kode sebelum menyerah. */
+function precheckBentrok() {
+  const groups = tandaiBentrok(data).groups;
+  if (!groups.length) return '';
+  const list = groups.map(([a, b]) => `<li><b>${esc(a.matkul)}</b> (${esc(a.kelas)||'-'}) ${fmtTime(a.mulai)}–${fmtTime(a.selesai)} ↔ <b>${esc(b.matkul)}</b> (${esc(b.kelas)||'-'}) ${fmtTime(b.mulai)}–${fmtTime(b.selesai)} • ${esc(a.hari)}</li>`).join('');
+  return `<div class="precheck"><b>⚠️ ${groups.length} bentrok di jadwal hasil pilihan ini</b><ul>${list}</ul></div>`;
+}
+/* untuk kode multi-kelas yang ikut bentrok: cari kelas lain yang jamnya bebas */
+function suggestKelas() {
+  const groups = tandaiBentrok(data).groups;
+  if (!groups.length) return '';
+  const guilty = new Set();
+  groups.forEach(([a, b]) => { if (a.kode) guilty.add(normKode(a.kode)); if (b.kode) guilty.add(normKode(b.kode)); });
+  const saran = [];
+  for (const pick of kodePicks) {
+    if (!guilty.has(pick.kode)) continue;
+    const opsi = kelasOpsi(pick.kode);
+    if (opsi.length < 2) continue; // hanya kode multi-kelas yang punya alternatif
+    const bebas = opsi.filter(o =>
+      !o.kelas || normKode(o.kelas) !== normKode(effectiveKelas.get(pick.kode)) // bukan kelas yang sekarang
+    ).filter(o => !data.some(d => d.kode !== pick.kode && bentrok(d, o)));
+    if (!bebas.length) continue;
+    const label = bebas.slice(0, 3).map(o => `<b>${esc(o.matkul || o.kelas || '-')}</b> ${esc(o.kelas)||'-'} (${esc(o.hari)} ${fmtTime(o.mulai)}–${fmtTime(o.selesai)})`).join('<br>');
+    saran.push(`<li><span class="saran-kode">${esc(pick.kode)}</span><div><small>coba kelas lain yang jamnya kosong:</small>${label}</div></li>`);
+  }
+  if (!saran.length) return '';
+  return `<div class="suggest"><b>💡 Saran: ganti kelas</b><ul>${saran.join('')}</ul></div>`;
 }
 /* ============================================================
    TEMPLATES & CSV EXPORT
@@ -698,6 +750,52 @@ setMode(savedMode, { silent: true });
 
 /* import master: reuse importExcel dengan intoMaster=true */
 $('btnMaster').addEventListener('click', () => importExcel('fileMaster','previewMaster','dropMaster','Teori','master',true));
+
+/* Simpan/ganti seluruh master dari array baris yang sudah siap (dipakai oleh
+   import file maupun tempelan portal). Mengganti — bukan menambah — supaya
+   upload ulang tidak menggandakan baris (perilaku lama importExcel master). */
+function ingestMasterRows(rows, sumber) {
+  master = [];
+  const r = importRows(rows, 'Teori', master);
+  saveMaster();
+  if (r.n) {
+    $('previewMaster').textContent = '✓ ' + r.n + ' baris master tersimpan dari ' + sumber + '.' + (r.lewat ? ' (' + r.lewat + ' dilewati)' : '');
+    toast(r.n + ' baris master tersimpan ✓');
+    if (kodePicks.length) regenFromMaster(); else renderKodeResult();
+  } else {
+    $('previewMaster').textContent = '✗ Tidak ada baris valid dari ' + sumber + ' — pastikan yang tersalin berisi tabel jadwal (hari/jam/matkul).';
+    toast('Tidak ada baris valid — cek hasil salinannya');
+  }
+  return r;
+}
+
+/* --- tempel tabel dari portal kampus (tanpa file) ---
+   Portal SIA/SISKA/Labkom umumnya halaman HTML biasa; blok + Ctrl+C menghasilkan
+   TSV (tab) atau CSV. Beberapa portal menyisipkan baris judul/section di atas
+   tabel — importRows sudah menangani itu via detectHeader(). */
+$('btnPasteMaster').addEventListener('click', () => {
+  const raw = $('pasteInput').value;
+  if (!String(raw).trim()) return toast('Tempel dulu tabel jadwalnya (Ctrl+V)');
+  let rows;
+  try { rows = parseCSVText(raw); } catch (e) { return toast('Gagal membaca tempelan'); }
+  if (!rows || !rows.length) return toast('Tempelan kosong / tidak terbaca');
+  // Ambil nama portal dari baris pertama kalau kelihatan seperti judul (1 sel panjang)
+  const first = (rows[0] || []).filter(c => String(c || '').trim() !== '');
+  const sumber = first.length === 1 && first[0].length > 3 ? '"' + String(first[0]).slice(0, 40) + '"' : 'tempelan portal';
+  const r = ingestMasterRows(rows, sumber);
+  if (r.n) $('pasteInput').value = ''; // bersihkan hanya kalau berhasil
+});
+
+/* --- simpan master ke CSV (backup / pindah perangkat) ---
+   Tanpa ini master (bisa ribuan baris) hilang total kalau localStorage dibersihkan
+   dan user harus mengunduh ulang dari portal. */
+$('btnExportMaster').addEventListener('click', () => {
+  if (!master.length) return toast('Belum ada master untuk disimpan');
+  const r = master.map(d => [d.matkul,d.kode,d.sks,d.hari,d.tipe,d.mulai,d.selesai,d.kelas,d.ruang,d.dosen,d.prodi]
+    .map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(','));
+  unduhCSV('master-jadwal.csv', [HEADER, ...r].join('\n'));
+  toast('Master disimpan (' + master.length + ' baris) ✓');
+});
 
 /* parse kode dari textarea → set kodePicks → render result → regen */
 $('btnParseKode').addEventListener('click', () => {
@@ -970,13 +1068,25 @@ function detectHeader(rows){
 }
 function parseCSVText(t){
   t=String(t||'').replace(/^\uFEFF/,'');
-  const lines=t.split(/\r?\n/).filter(l=>l.trim()!=='');
+  let lines=t.split(/\r?\n/).filter(l=>l.trim()!=='');
   if(!lines.length)return[];
+  // Tempelan dari portal kampus tidak selalu punya tab: kalau kolom "ngumpul" jadi
+  // satu sel, mungkin pemisahnya sebenarnya spasi bertingkat atau baris tanpa sel
+  // kosong. Coba rapikan dulu, pakai versi yang kolomnya LEBIH BANYAK \u2014 kalau tidak
+  // deteksi delimiter di bawah akan jatuh ke koma dan seluruh baris jadi 1 kolom.
+  const better = alt => Math.min(...alt.slice(0,5).map(l=>l.split(/\t/).length)) > Math.min(...lines.slice(0,5).map(l=>l.split(/\t/).length));
+  const byGap = lines.map(l=>l.replace(/[ ]{2,}|\u00A0{2,}/g,'\t'));
+  if (better(byGap)) lines = byGap;
   const cands=[';','\t','|',','];let bestD=',',bestScore=-1e9;
   for(const d of cands){
     const cols=lines.slice(0,5).map(l=>l.split(d).length);
-    const mn=Math.min(...cols);const dev=cols.reduce((a,b)=>a+Math.abs(b-cols[0]),0);
-    const score=mn*10-dev;if(score>bestScore){bestScore=score;bestD=d}
+    const dev=cols.reduce((a,b)=>a+Math.abs(b-cols[0]),0);
+    // Rata-rata kolom, bukan minimum: teks di dalam sel CSV boleh mengandung koma
+    // ("Algoritma, Lanjut") sehingga SATU baris punya kolom lebih banyak dan min()
+    // jadi 1 untuk semua delimiter — deteksi selalu jatuh ke koma. Rata-rata tetap
+    // menang untuk delimiter yang benar, dan konsistensi (dev kecil) mengunci pilihan.
+    const avg=cols.reduce((a,b)=>a+b,0)/cols.length;
+    const score=avg*10-dev;if(score>bestScore){bestScore=score;bestD=d}
   }
   return lines.map(l=>{
     const out=[];let cur='',q=false;
@@ -1122,8 +1232,7 @@ function importExcel(fileId,previewId,dropId,tipeDefault,tipeLabel,intoMaster){
         $(previewId).textContent='✓ '+r.n+' baris master tersimpan.'+(r.lewat?' ('+r.lewat+' dilewati)':'');
         toast(r.n?r.n+' baris master tersimpan ✓':'Tidak ada baris valid');
         if(kodePicks.length)regenFromMaster();
-      }else{
-        const r=importRows(rows,tipeDefault,data);
+      }else{        const r=importRows(rows,tipeDefault,data);
         reset();save();render();
         $(previewId).textContent='✓ '+r.n+' baris '+tipeLabel+' ditambahkan.'+(r.lewat?' ('+r.lewat+' tanpa nama dilewati)':'')+(r.headerRow>0?' (header baris '+(r.headerRow+1)+')':'');
         toast(r.n?r.n+' jadwal '+tipeLabel+' ditambahkan ✓':'Tidak ada baris valid — cek format kolom');

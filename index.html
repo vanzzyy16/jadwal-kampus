@@ -153,11 +153,21 @@
         <div class="filerow"><span id="fileNameMaster" class="filename">Belum ada file</span></div>
         <button id="btnMaster" class="btn-primary w">Proses Master</button>
         <div id="previewMaster" class="preview" role="status" aria-live="polite"></div>
+
+        <!-- Alternatif tanpa file: portal SIA/Labkom biasanya halaman web biasa.
+             User blok tabelnya, Ctrl+C, lalu tempel di sini — dibaca sebagai TSV/CSV. -->
+        <details class="paste-wrap" id="pasteWrap">
+          <summary>📋 Tempel tabel dari portal (tanpa file)</summary>
+          <p class="muted">Buka jadwal lengkap di portal kampus (SIA / SISKA / Labkom), blok tabelnya, tekan Ctrl+C, lalu tempel di bawah ini.</p>
+          <textarea id="pasteInput" rows="5" placeholder="Ctrl+V di sini — tabel dari portal kampus" aria-label="Tempel tabel jadwal dari portal"></textarea>
+          <button id="btnPasteMaster" class="btn-primary w">📋 Proses Tempelan</button>
+        </details>
+
         <label class="muted" for="kodeInput">Masukkan Kode MK <small>(satu per baris / koma)</small></label>
         <textarea id="kodeInput" rows="5" placeholder="IF301&#10;IF302&#10;IF301P" aria-label="Daftar kode mata kuliah"></textarea>
         <button id="btnParseKode" class="btn-primary w">🔍 Parse Kode</button>
         <div id="kodeResult" class="kode-result" role="status" aria-live="polite"></div>
-        <div class="dl"><button id="btnClearMaster" class="link danger">🗑️ Hapus master</button></div>
+        <div class="dl"><button id="btnExportMaster" class="link">⬇ Simpan master (CSV)</button><button id="btnClearMaster" class="link danger">🗑️ Hapus master</button></div>
       </div>
 
       <div class="card form-card">
